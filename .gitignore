@@ -1,0 +1,33 @@
+# ==========================================
+# GITHUB IGNORE FILE CHO DEEP LEARNING PROJECT
+# ==========================================
+
+# 1. Môi trường ảo & Cache hệ thống
+venv/
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+.pytest_cache/
+
+# 2. Dữ liệu (TUYỆT ĐỐI BỎ QUA - Tránh nổ GitHub)
+# (Chúng ta chỉ giữ lại các file cấu hình *.yaml trong thư mục data)
+data/raw/
+data/processed/
+data/clahe_baseline/
+data/enhanced/
+*.cache
+*.json
+*.zip
+
+# 3. Model Trọng Số (Chỉ chặn file rác/pretrained)
+# Các file trong models/runs/ (best.pt, biểu đồ PNG) sẽ được đẩy lên để khoe kết quả!
+models/pretrained/
+yolo11n.pt
+yolo26n.pt
+
+# 4. Tệp hệ thống OS
+.DS_Store
+Thumbs.db
+desktop.ini
