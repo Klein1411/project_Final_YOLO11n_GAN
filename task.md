@@ -132,7 +132,7 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 
 - **Vấn đề**: BDD100k có 1.4GB JSON và 100k ảnh. Nếu gộp chung Day/Night, YOLO sẽ học rất tốt nhưng bị "bias" (thiên lệch) về ảnh ban ngày, làm mất đi giá trị của mô-đun GAN ở Giai đoạn 4.
 - **Giải pháp**: Phân tách BDD100k thành 2 tập độc lập `bdd_day` và `bdd_night` (loại bỏ hoàn toàn thẻ thời tiết lấp lửng `dawn/dusk`).
-- **Xử lý luồng JSON**: Sử dụng thư viện `ijson` để parse từng node một thay vì load toàn bộ vào RAM, giúp mức sử dụng RAM duy trì ở mức phẳng (<1GB). Lọc bỏ các Box `occluded=True` và chuẩn hóa tọa độ về YOLO format `[0, 1]`.
+- **Xử lý luồng JSON**: Sử dụng thư viện `ijson` để parse từng node một thay vì load toàn bộ vào RAM, giúp mức sử dụng RAM duy trì ở mức phẳng (<1GB). CHÚ Ý: Giữ lại toàn bộ các Box bị che khuất (occluded) để model học sát với thực tế giao thông đông đúc, tránh hiện tượng False Positive vô lý khi xe bị khuất 1 nửa. Chuẩn hóa tọa độ về YOLO format `[0, 1]`.
 - **Chiến lược Domain Adaptation (Phương án 3)**:
   1. **Base Training**: Huấn luyện YOLO trên tập `bdd_day` trước. Mô hình sẽ học được cấu trúc hình học sắc nét của xe cộ, biển báo dưới ánh sáng lý tưởng.
   2. **Nighttime Fine-tuning**: Khóa các lớp đặc trưng (hoặc dùng Learning Rate thấp), đem trọng số đã học ở trên fine-tune độc quyền trên tập `bdd_night`. Mô hình trở thành "Chuyên gia bóng đêm có nền tảng học vấn từ ban ngày". Chiến lược này cho mAP cao hơn hẳn việc chỉ train ảnh đêm từ số 0, và đồng thời giữ nguyên đất diễn cho GAN tỏa sáng ở Giai đoạn 4.
