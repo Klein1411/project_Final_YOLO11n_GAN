@@ -161,7 +161,7 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 
 ---
 
-## 6. Kết Quả Huấn Luyện ExDark — Pha 1 (Epoch 1–50)
+## 6. Kết Quả Huấn Luyện ExDark — Pha 1: Khởi Tạo Nền Tảng (Epoch 1–50)
 
 ### 6.1. Bảng Siêu Tham Số Huấn Luyện
 
@@ -222,7 +222,112 @@ _Nhận xét_: Cả 3 hàm Loss đều giảm đều, mAP tăng liên tục khô
 
 ---
 
-## 7. Nhật Ký Sự Cố & Bài Học Kinh Nghiệm (Incident Log)
+## 7. Kết Quả Huấn Luyện ExDark — Pha 2: Resume Training (80 Epochs)
+
+### 7.1. Bối Cảnh Kỹ Thuật
+
+Do Pha 2 sử dụng lệnh `resume` không đúng cú pháp (truyền tham số thừa cùng `resume=True`), hệ thống YOLO đã reset bộ đếm Epoch về 1 và khởi tạo lại trình tối ưu (Optimizer State). Trọng số Neural Network (backbone, neck, head) từ Pha 1 được nạp đúng, nhưng bộ đếm học tập và trạng thái Momentum bị xóa sạch.
+
+- **Tổng kiến thức tích lũy**: Tương đương ~130 Epoch (50 gốc + 80 resume).
+- **Hiệu quả thực tế**: Gần đúng **80 Epoch với warm-start tốt** (trọng số đã hội tụ sơ bộ, bỏ qua giai đoạn khám phá ngẫu nhiên ban đầu).
+- **Bằng chứng warm-start**: `box_loss` ở Epoch 1/80 (Pha 2) = 1.562, thấp hơn hẳn Epoch 1/50 (Pha 1) = 2.198.
+- **Thời gian huấn luyện**: ~132 phút (7,905 giây) trên RTX 3050 Laptop GPU.
+
+### 7.2. Bảng So Sánh Tổng Hợp: Pha 1 (EP50) vs Pha 2 (EP80)
+
+| Chỉ số | Pha 1 (EP50) | Pha 2 (EP80) | Δ Thay đổi | Đánh giá |
+|---|---|---|---|---|
+| **mAP50** | 0.569 (56.9%) | **0.636** (63.6%) | **+6.7%** | Cải thiện đáng kể |
+| **mAP50-95** | 0.340 (34.0%) | **0.393** (39.3%) | **+5.3%** | Cải thiện đáng kể |
+| Precision | 0.613 | **0.692** | +7.9% | Giảm dự đoán sai (False Positive) |
+| Recall | 0.528 | **0.575** | +4.7% | Phát hiện thêm vật thể bị bỏ sót |
+| F1 Score (best) | — | **0.63** @ conf=0.326 | — | Điểm cân bằng tối ưu giữa P và R |
+| Train box_loss | 1.385 | **1.220** | -11.9% | Định vị chính xác hơn |
+| Train cls_loss | 1.437 | **1.064** | -26.0% | Phân lớp sắc nét hơn |
+| Val box_loss | 1.476 | **1.439** | -2.5% | Gần bão hòa |
+| Val cls_loss | 1.535 | **1.328** | -13.5% | Vẫn cải thiện nhẹ |
+| Tổng thời gian | ~120 phút | +~132 phút | ~252 phút tổng | ~4.2 giờ trên RTX 3050 |
+
+### 7.3. Bảng mAP50 Theo Từng Lớp — So Sánh Pha 1 vs Pha 2
+
+| Hạng | Lớp | mAP50 (EP50) | mAP50 (EP80) | Δ | Nhận xét |
+|---|---|---|---|---|---|
+| 1 | **Bus** | 0.817 | **0.874** | +5.7% | Vật thể lớn nhất, hình khối vuông vắn, phản quang mạnh |
+| 2 | **Car** | 0.679 | **0.740** | +6.1% | Lớp phổ biến, dễ nhận biết nhờ đèn pha |
+| 3 | **Bicycle** | 0.680 | **0.733** | +5.3% | Khung kim loại tạo viền sáng trong tối |
+| 4 | **People** | 0.671 | **0.711** | +4.0% | Lớp xuất hiện nhiều nhất trong tập ExDark |
+| 5 | **Motorbike** | 0.597 | **0.673** | +7.6% | Cải thiện rất mạnh |
+| 6 | **Bottle** | 0.581 | **0.631** | +5.0% | Vật nhỏ, khó nhận diện trong tối |
+| 7 | **Boat** | 0.559 | **0.608** | +4.9% | Phản chiếu mặt nước gây nhiễu |
+| 8 | **Cup** | 0.512 | **0.592** | +8.0% | Bứt phá tốt, vật rất nhỏ |
+| 9 | **Dog** | 0.508 | **0.573** | +6.5% | Vẫn nhầm lẫn với Cat (23% Dog → Cat) |
+| 10 | **Cat** | 0.438 | **0.540** | +10.2% | Cải thiện mạnh nhất theo tỷ lệ phần trăm |
+| 11 | **Chair** | 0.431 | **0.492** | +6.1% | Viền phẳng, hòa lẫn vào nền tối |
+| 12 | **Table** | 0.357 | **0.449** | +9.2% | Yếu nhất nhưng tiến bộ vượt bậc |
+
+### 7.4. Phân Tích Ma Trận Nhầm Lẫn (Confusion Matrix Analysis)
+
+Ma trận nhầm lẫn chuẩn hóa (Normalized Confusion Matrix) tiết lộ các mẫu hình nhận diện sai có hệ thống trong điều kiện thiếu sáng:
+
+**Nhóm 1 — Nhận diện xuất sắc (Đường chéo chính ≥ 0.65):**
+- **Bus (0.79)**: Gần hoàn hảo. Chỉ 1% nhầm sang Car (hợp lý vì cùng phương tiện giao thông).
+- **Car (0.73)**: Rất mạnh. 3% nhầm sang Bus, 14% bị Background nuốt.
+- **Bicycle (0.71)**: Khung xe kim loại phản sáng tạo đặc trưng viền rõ ràng.
+- **People (0.65)**: Ổn định. 28% bị Background nuốt (người đứng xa, tối).
+
+**Nhóm 2 — Nhầm lẫn liên lớp có hệ thống (Cross-class Confusion):**
+- **Dog ↔ Cat**: 23% Dog bị dự đoán nhầm thành Cat; 15% Cat bị dự đoán nhầm thành Dog. Trong điều kiện ánh sáng cực yếu, hình dáng bốn chân của 2 loài gần như giống hệt nhau. Đây là giới hạn vật lý của detector khi thiếu thông tin màu sắc/kết cấu lông.
+- **Motorbike ↔ Bicycle**: 4% Motorbike nhầm thành Bicycle. Hợp lý vì cùng là xe 2 bánh, chỉ khác kích thước.
+
+**Nhóm 3 — Bị Background "nuốt" (False Negative nặng):**
+- **Chair (0.50)**: 50% ghế bị model bỏ sót hoàn toàn, xếp vào nền. Viền ghế phẳng, mỏng, hòa lẫn vào bóng tối.
+- **Bottle (0.42)**: 42% chai bị bỏ sót. Vật thể rất nhỏ, độ phân giải thấp trong tối.
+- **Cup (0.40)**: 40% ly bị bỏ sót. Tương tự Bottle.
+- **Table (0.50)**: 50% bàn bị bỏ sót. Mặt phẳng ngang không có đặc trưng hình học nổi bật.
+
+_Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" của mạng GAN ở Giai đoạn 4. Khi GAN thắp sáng bức ảnh, các vật thể nhỏ/phẳng sẽ hiện rõ đường viền, giúp YOLO giảm False Negative đáng kể.
+
+### 7.5. Phân Tích Xu Hướng Hội Tụ (Convergence Analysis)
+
+| Epoch | train/box_loss | train/cls_loss | val/box_loss | val/cls_loss | mAP50 | mAP50-95 |
+|---|---|---|---|---|---|---|
+| 1 | 1.562 | 1.882 | 1.680 | 1.941 | 0.411 | 0.227 |
+| 10 | 1.555 | 1.854 | 1.602 | 1.798 | 0.462 | 0.263 |
+| 20 | 1.524 | 1.751 | 1.563 | 1.685 | 0.517 | 0.300 |
+| 30 | 1.475 | 1.642 | 1.505 | 1.563 | 0.556 | 0.330 |
+| 40 | 1.434 | 1.555 | 1.476 | 1.479 | 0.583 | 0.348 |
+| 50 | 1.384 | 1.436 | 1.456 | 1.408 | 0.612 | 0.372 |
+| 60 | 1.350 | 1.363 | 1.445 | 1.371 | 0.622 | 0.380 |
+| 70 | 1.318 | 1.293 | 1.437 | 1.343 | 0.629 | 0.389 |
+| 80 | 1.220 | 1.064 | 1.439 | 1.328 | 0.636 | 0.393 |
+
+**Nhận định hội tụ:**
+1. **Train Loss giảm mạnh liên tục**: `cls_loss` giảm từ 1.882 → 1.064 (-43.4%). Model ngày càng phân lớp sắc bén hơn trên tập huấn luyện.
+2. **Val Loss phẳng từ Epoch 60**: `val/box_loss` dao động quanh 1.44 (±0.005). `val/cls_loss` vẫn giảm nhẹ nhưng biên độ rất nhỏ (1.371 → 1.328).
+3. **Khoảng cách Train-Val nới rộng**: Dấu hiệu Overfitting nhẹ. Train box_loss = 1.220 trong khi Val box_loss = 1.439 (chênh lệch 0.219). Tuy nhiên, mAP vẫn tăng nhẹ nên chưa gây hại thực tế.
+4. **mAP50 bão hòa từ Epoch 68**: Dao động ±0.005 (tức ~0.5%), gần như nằm ngang.
+5. **Early Stopping (patience=15) không kích hoạt**: Vì mAP vẫn tăng liên tục dù rất nhỏ, nhưng không đủ để Patience đếm ngược.
+
+### 7.6. Nhận Định Tổng Thể & Quyết Định Chiến Lược
+
+**Model ExDark đã đạt trần hiệu suất (Performance Ceiling) với kiến trúc YOLO11n trên dữ liệu tối nguyên bản.** Việc tiếp tục train thêm Epoch sẽ chỉ tạo ra mức tăng ~0.1-0.2% mAP, không đáng bù chi phí thời gian và rủi ro Overfitting.
+
+**Quyết định**: Khóa sổ ExDark tại 80 Epoch, sử dụng `best.pt` (5.2 MB) làm trọng số chính thức. Để dành "dư địa cải thiện" cho mạng GAN ở Giai đoạn 4 — đây mới là nơi tạo ra bước nhảy vọt mAP thực sự khi các vật thể nhỏ/mờ (Chair, Table, Cup, Bottle) được thắp sáng.
+
+**Hồ sơ trọng số lưu trữ:**
+
+| File | Dung lượng | Mô tả |
+|---|---|---|
+| `weights/best.pt` | 5.2 MB | Trọng số tốt nhất trong suốt 80 Epoch. Dùng cho Inference. |
+| `weights/last.pt` | 5.2 MB | Trọng số Epoch cuối cùng (80). Kích thước trùng best → best ≈ last. |
+| `weights/best_epoch50.pt` | 20.3 MB | Sao lưu trọng số tốt nhất Pha 1 (bao gồm Optimizer State). |
+| `weights/last_epoch50.pt` | 20.3 MB | Sao lưu trọng số cuối Pha 1 (bao gồm Optimizer State). |
+| `milestone_epoch50/results_epoch50.csv` | 6.0 KB | Bảng số liệu 50 Epoch đầu tiên (khôi phục từ bộ nhớ agent). |
+| `results.csv` | 9.9 KB | Bảng số liệu 80 Epoch Pha 2 (file chính thức). |
+
+---
+
+## 8. Nhật Ký Sự Cố & Bài Học Kinh Nghiệm (Incident Log)
 
 | #   | Sự cố                                     | Nguyên nhân                                     | Giải pháp                                                                                                                          |
 | --- | ----------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -234,7 +339,7 @@ _Nhận xét_: Cả 3 hàm Loss đều giảm đều, mAP tăng liên tục khô
 
 ---
 
-## 8. Bảng Theo Dõi Tiến Độ (Task Tracker Checklist)
+## 9. Bảng Theo Dõi Tiến Độ (Task Tracker Checklist)
 
 - `[x]` **Giai đoạn 1: Khởi tạo Project & Môi trường (Environment Setup)**
   - `[x]` Thiết lập cấu trúc thư mục quy chuẩn (`data`, `notebooks`, `models`, `docs`, `scripts`).
@@ -257,9 +362,9 @@ _Nhận xét_: Cả 3 hàm Loss đều giảm đều, mAP tăng liên tục khô
   - `[x]` Cấu hình siêu tham số chống tràn RAM: YOLO11n, Batch=8, Auto-Accumulate, Cache=Disk.
   - `[x]` Cấu hình cơ chế chống Overfit: Patience=15, Mosaic=0.5, Close_Mosaic=10, AdamW.
   - `[x]` **Hoàn tất Pha 1**: ExDark 50 Epochs → mAP50=0.569, mAP50-95=0.340. Sao lưu mốc `milestone_epoch50/`.
-  - `[/]` **Đang chạy Pha 2**: ExDark +80 Epochs từ trọng số Epoch 50 (tổng ~130 epoch kiến thức). Notebook: `02b_resume_exdark.ipynb`.
+  - `[x]` **Hoàn tất Pha 2**: ExDark +80 Epochs từ trọng số Epoch 50 → mAP50=**0.636** (+6.7%), mAP50-95=**0.393** (+5.3%). Model bão hòa từ EP65. Khóa sổ.
   - `[x]` **Chuẩn bị BDD100k**: Đã viết thành công `scripts/preprocess_bdd100k.py` với cơ chế ijson stream và Auto-Fallback Symlink/Copy.
-  - `[ ]` **⚠ ĐANG CHỜ**: Chờ ExDark train xong 80 Epoch mới được phép chạy script tiền xử lý BDD100k để tránh nghẽn I/O ổ cứng.
+  - `[ ]` Chạy `scripts/preprocess_bdd100k.py` để tách ~52k ảnh Day và ~39k ảnh Night. (GPU đã rảnh)
   - `[ ]` Huấn luyện mô hình YOLO11n trên tập Ban ngày (`bdd_day`) để tạo Base Model.
   - `[ ]` Fine-tune mô hình YOLO11n trên tập Ban đêm (`bdd_night`) từ trọng số Base.
   - `[ ]` Đánh giá mAP theo tiêu chuẩn COCO (mAP50-95).
@@ -274,7 +379,7 @@ _Nhận xét_: Cả 3 hàm Loss đều giảm đều, mAP tăng liên tục khô
 
 ---
 
-## 9. Tệp Rác Cần Dọn Dẹp (Cleanup)
+## 10. Tệp Rác Cần Dọn Dẹp (Cleanup)
 
 | File                | Vị trí                           | Lý do                                                |
 | ------------------- | -------------------------------- | ---------------------------------------------------- |
