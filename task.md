@@ -28,16 +28,16 @@ Do dung lượng các tập dữ liệu lớn và yêu cầu xác thực, cần 
 
 Kiến trúc mạng Neural và các giải thuật tối ưu trong dự án này được thiết kế và khóa cứng dựa trên cấu hình phần cứng vật lý khả dụng của trạm xử lý:
 
-| Thành phần       | Thông số                                                |
-| ---------------- | ------------------------------------------------------- |
-| **GPU**          | NVIDIA GeForce RTX 3050 Laptop GPU                      |
-| **VRAM**         | 4.0 GB*(Ràng buộc nghiêm ngặt nhất)*                    |
-| **System RAM**   | ~24 GB (23.71 GB khả dụng)                              |
-| **Ổ cứng**       | SSD NVMe                                                |
-| **Hệ Điều Hành** | Windows (Native)                                        |
-| **Python**       | 3.10.11                                                 |
-| **PyTorch**      | CUDA 12.1 — Xử lý mạng YOLOv11                          |
-| **TensorFlow**   | 2.10.0 — Phiên bản cuối hỗ trợ GPU Windows, phục vụ GAN |
+| Thành phần               | Thông số                                                      |
+| -------------------------- | --------------------------------------------------------------- |
+| **GPU**              | NVIDIA GeForce RTX 3050 Laptop GPU                              |
+| **VRAM**             | 4.0 GB*(Ràng buộc nghiêm ngặt nhất)*                       |
+| **System RAM**       | ~24 GB (23.71 GB khả dụng)                                    |
+| **Ổ cứng**         | SSD NVMe                                                        |
+| **Hệ Điều Hành** | Windows (Native)                                                |
+| **Python**           | 3.10.11                                                         |
+| **PyTorch**          | CUDA 12.1 — Xử lý mạng YOLOv11                              |
+| **TensorFlow**       | 2.10.0 — Phiên bản cuối hỗ trợ GPU Windows, phục vụ GAN |
 
 _Khuyến nghị Học thuật: Mọi cấu hình siêu tham số (Batch Size, Accumulate, Model Size) trong các giai đoạn sau đều được nội suy và thiết lập theo tỷ lệ nghịch với dung lượng 4GB VRAM của card RTX 3050 nhằm triệt tiêu lỗi Out of Memory (OOM)._
 
@@ -113,13 +113,13 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 
 ### 4.3. Kiểm kê Dữ liệu Thực tế (Data Inventory)
 
-| Thư mục                  | Train                    | Val                      | Ghi chú                              |
-| ------------------------ | ------------------------ | ------------------------ | ------------------------------------ |
-| `processed/` (ExDark)    | 5,890 ảnh + 5,890 nhãn   | 1,472 ảnh + 1,472 nhãn   | Đã huấn luyện xong Phase 1 & 2       |
-| `processed/bdd_day`      | 36,728 ảnh + 36,728 nhãn | 5,258 ảnh + 5,258 nhãn   | Sẵn sàng cho Base Training           |
-| `processed/bdd_night`    | 27,971 ảnh + 27,971 nhãn | 3,929 ảnh + 3,929 nhãn   | Sẵn sàng cho Fine-tuning             |
-| `clahe_baseline/`        | 11,780 files             | 2,944 files              | Sẵn sàng (ExDark + nhãn)             |
-| `enhanced/` (GAN)      | —                      | —                      | Pending Giai đoạn 4                  |
+| Thư mục               | Train                      | Val                      | Ghi chú                           |
+| ----------------------- | -------------------------- | ------------------------ | ---------------------------------- |
+| `processed/` (ExDark) | 5,890 ảnh + 5,890 nhãn   | 1,472 ảnh + 1,472 nhãn | Đã huấn luyện xong Phase 1 & 2 |
+| `processed/bdd_day`   | 36,728 ảnh + 36,728 nhãn | 5,258 ảnh + 5,258 nhãn | Sẵn sàng cho Base Training       |
+| `processed/bdd_night` | 27,971 ảnh + 27,971 nhãn | 3,929 ảnh + 3,929 nhãn | Sẵn sàng cho Fine-tuning         |
+| `clahe_baseline/`     | 11,780 files               | 2,944 files              | Sẵn sàng (ExDark + nhãn)        |
+| `enhanced/` (GAN)     | —                         | —                       | Pending Giai đoạn 4              |
 
 ---
 
@@ -145,12 +145,23 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 
 - **Mục tiêu**: Huấn luyện và so sánh mAP của kiến trúc YOLOv11 trên các miền dữ liệu (Tối nguyên bản và Tối qua xử lý CLAHE).
 - **Thiết kế Độc Lập**: Triển khai huấn luyện 2 mô hình YOLO biệt lập cho ExDark (12 lớp) và BDD100k (10 lớp) để loại trừ xung đột không gian nhãn.
+- **Ràng buộc thay thế Output Head (Head Replacement Constraint)**: Hệ thống BẮT BUỘC phải tiến hành Base Training trên `bdd_day` thay vì sử dụng trực tiếp trọng số `yolo11n.pt` nguyên bản. Dưới đây là bằng chứng thực chứng (Zero-shot Assessment) giải thích lý do:
+
+
+  **Hậu quả nếu không huấn luyện lại (Lệch pha nhãn - Mismatch):**
+
+  1. **Nhiễu ngoại lai (Out-of-Distribution Hallucination):** Ở Mẫu 3, mô hình nhận diện sai một cái bóng râm thành `bench` (ghế đá). `Bench` là lớp thuộc COCO, hoàn toàn không tồn tại trong từ điển 10 lớp giao thông của BDD100k. Việc sử dụng trực tiếp sẽ gây ô nhiễm dữ liệu đầu ra và làm sai lệch mAP.
+  2. **Lệch chỉ số ID (Class ID Drift):** Bảng mã COCO (Xe tải = ID 7) xung đột kịch liệt với bảng mã BDD100k (Xe tải = ID 3). Mọi phương tiện "Xe tải" nhận diện được sẽ bị hệ thống đánh giá chấm sai thành lớp khác (ví dụ: Xe đạp).
+
+  **Kết luận kỹ thuật:** Việc khởi chạy lệnh `model.train(data='bdd_day.yaml')` là bắt buộc để thuật toán tự động **chặt bỏ** lớp Classification Head 80-Class cũ của COCO, và khởi tạo lại ngẫu nhiên một ma trận 10-Class chuẩn hóa chuyên biệt cho BDD100k. Quá trình này giữ nguyên kỹ năng thị giác (Backbone) nhưng dạy lại mô hình cách "gọi tên" chuẩn xác.
 - **Tối ưu hóa Tài nguyên (4GB VRAM Constraint)**: Bắt buộc triển khai kiến trúc **YOLO11n (Nano)** với ~2.6 triệu tham số. Khóa cứng kích thước vật lý `batch_size=8` để tránh tràn bộ nhớ (Out of Memory). Hệ thống tự động nội suy kỹ thuật **Auto-Accumulate** (64 / Batch = 8) nhằm mô phỏng kích thước lô ảo lên 64, giúp ổn định đạo hàm mà không vi phạm cú pháp API mới của Ultralytics.
 - **Quản trị Khủng hoảng System RAM (Windows Standby Cache & Multi-processing)**:
+
   - _Nút thắt cổ chai (Bottleneck)_: Trong môi trường Windows, thư viện PyTorch kích hoạt đa luồng (multi-processing) thông qua cơ chế `spawn` (tạo mới quy trình) thay vì `fork` (sao chép quy trình). Tham số mặc định `workers=8` yêu cầu cấp phát 8 phiên bản bộ nhớ độc lập cho DataLoader, làm bùng nổ xung đột không gian nhớ.
   - _Cơ chế Caching Ổ cứng (`cache='disk'`)_: Thay vì để CPU liên tục giải nén ảnh JPEG và nội suy kích thước (Dynamic Letterboxing) theo thời gian thực (gây quá tải CPU), hệ thống được lệnh tiền xử lý toàn bộ tập dữ liệu thành các ma trận NumPy thuần túy (uncompressed tensors) và ghi thẳng xuống SSD. Quá trình này tiêu tốn 12.5 GB dung lượng vật lý, nhưng triệt tiêu hoàn toàn độ trễ giải nén.
   - _Hiện tượng Ảo ảnh Bộ nhớ (Memory Mirage)_: Khi đọc liên tục file `.cache` 12.5 GB từ SSD, Windows OS Memory Manager tự động thu hồi toàn bộ RAM nhàn rỗi để đưa vào danh sách chờ (`Standby List`), biến RAM thành một bộ đệm siêu tốc (Disk Cache). Dù Task Manager báo động đỏ System RAM chạm mức 95%+, thực tế đây chỉ là "RAM Ảo". Lượng RAM này sẽ lập tức được hệ điều hành giải phóng (evicted) nếu có tiến trình ưu tiên cao hơn yêu cầu cấp phát. Đây là hành vi thiết kế có chủ đích (By Design) và an toàn tuyệt đối.
 - **Cơ chế Chống Quá Khớp (Anti-Overfitting & Hallucination)**:
+
   - Áp dụng **Early Stopping** (`patience=15`), tự động ngắt chu kỳ huấn luyện nếu mAP không cải thiện.
   - Sử dụng **Mosaic Augmentation** (`mosaic=0.5`) để tăng cường bối cảnh không gian, đi kèm `close_mosaic=10` ở các epoch cuối cùng nhằm tinh chỉnh viền đối tượng nguyên bản.
   - Kích hoạt trình tối ưu **AdamW** với cơ chế Weight Decay để kiểm soát ngưỡng bùng nổ tham số.
@@ -167,46 +178,46 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 
 ### 6.1. Bảng Siêu Tham Số Huấn Luyện
 
-| Tham số         | Giá trị        | Lý do                                           |
-| --------------- | -------------- | ----------------------------------------------- |
-| Model           | YOLO11n (Nano) | Kiến trúc nhẹ nhất (~2.6M params), vừa VRAM 4GB |
-| Batch Size      | 8              | Mức tối đa VRAM 4GB chịu được                   |
-| Auto-Accumulate | 64/8 = 8       | Mô phỏng batch ảo = 64 để ổn định đạo hàm       |
-| Image Size      | 640×640        | Dynamic Letterboxing giữ tỷ lệ khung hình       |
-| Optimizer       | AdamW          | Chuyên biệt cho tập dữ liệu nhiễu hạt           |
-| Epochs          | 50 (Pha 1)     | Early Stopping không kích hoạt → chưa bão hòa   |
-| Patience        | 15             | Dừng sớm nếu mAP không cải thiện                |
-| Mosaic          | 0.5            | Augmentation ghép 4 ảnh ngẫu nhiên              |
-| Close Mosaic    | 10             | Tắt Mosaic ở 10 epoch cuối để học viền thật     |
-| Cache           | disk (12.5 GB) | Giảm tải CPU giải nén, đánh đổi dung lượng SSD  |
-| AMP             | True           | Mixed Precision FP16 tăng tốc                   |
+| Tham số        | Giá trị      | Lý do                                                   |
+| --------------- | -------------- | -------------------------------------------------------- |
+| Model           | YOLO11n (Nano) | Kiến trúc nhẹ nhất (~2.6M params), vừa VRAM 4GB     |
+| Batch Size      | 8              | Mức tối đa VRAM 4GB chịu được                     |
+| Auto-Accumulate | 64/8 = 8       | Mô phỏng batch ảo = 64 để ổn định đạo hàm     |
+| Image Size      | 640×640       | Dynamic Letterboxing giữ tỷ lệ khung hình            |
+| Optimizer       | AdamW          | Chuyên biệt cho tập dữ liệu nhiễu hạt             |
+| Epochs          | 50 (Pha 1)     | Early Stopping không kích hoạt → chưa bão hòa     |
+| Patience        | 15             | Dừng sớm nếu mAP không cải thiện                   |
+| Mosaic          | 0.5            | Augmentation ghép 4 ảnh ngẫu nhiên                   |
+| Close Mosaic    | 10             | Tắt Mosaic ở 10 epoch cuối để học viền thật      |
+| Cache           | disk (12.5 GB) | Giảm tải CPU giải nén, đánh đổi dung lượng SSD |
+| AMP             | True           | Mixed Precision FP16 tăng tốc                          |
 
 ### 6.2. Bảng Kết Quả Chính (Epoch 50)
 
-| Chỉ số       | Giá trị                 | Đánh giá                         |
-| ------------ | ----------------------- | -------------------------------- |
-| **mAP50**    | **0.569** (56.9%)       | Trung bình khá cho điều kiện tối |
-| **mAP50-95** | **0.340** (34.0%)       | Tiêu chuẩn COCO, chấp nhận được  |
-| Precision    | 0.613                   | 61.3% dự đoán đúng               |
-| Recall       | 0.528                   | 52.8% vật thể được phát hiện     |
-| Train Time   | ~7,230 giây (~120 phút) | 2 giờ trên RTX 3050              |
-| VRAM sử dụng | ~1.35G / 4.0G           | Còn headroom an toàn             |
+| Chỉ số           | Giá trị                 | Đánh giá                            |
+| ------------------ | ------------------------- | -------------------------------------- |
+| **mAP50**    | **0.569** (56.9%)   | Trung bình khá cho điều kiện tối |
+| **mAP50-95** | **0.340** (34.0%)   | Tiêu chuẩn COCO, chấp nhận được |
+| Precision          | 0.613                     | 61.3% dự đoán đúng                |
+| Recall             | 0.528                     | 52.8% vật thể được phát hiện    |
+| Train Time         | ~7,230 giây (~120 phút) | 2 giờ trên RTX 3050                  |
+| VRAM sử dụng     | ~1.35G / 4.0G             | Còn headroom an toàn                 |
 
 ### 6.3. Bảng mAP50 Theo Từng Lớp (Per-Class Performance)
 
-| Lớp       | mAP50     | Nhận xét                            |
-| --------- | --------- | ----------------------------------- |
+| Lớp      | mAP50           | Nhận xét                                  |
+| --------- | --------------- | ------------------------------------------- |
 | Bus       | **0.817** | Tốt nhất — vật thể to, hình dạng rõ |
-| Bicycle   | 0.680     | Tốt                                 |
-| Car       | 0.679     | Tốt                                 |
-| People    | 0.671     | Tốt — xuất hiện nhiều nhất          |
-| Motorbike | 0.597     | Khá                                 |
-| Bottle    | 0.581     | Khá                                 |
-| Boat      | 0.559     | Trung bình                          |
-| Cup       | 0.512     | Trung bình                          |
-| Dog       | 0.508     | Trung bình — dễ lẫn với Cat         |
-| Cat       | 0.438     | Yếu — hình dạng tương tự Dog        |
-| Chair     | 0.431     | Yếu — viền mờ trong bóng tối        |
+| Bicycle   | 0.680           | Tốt                                        |
+| Car       | 0.679           | Tốt                                        |
+| People    | 0.671           | Tốt — xuất hiện nhiều nhất            |
+| Motorbike | 0.597           | Khá                                        |
+| Bottle    | 0.581           | Khá                                        |
+| Boat      | 0.559           | Trung bình                                 |
+| Cup       | 0.512           | Trung bình                                 |
+| Dog       | 0.508           | Trung bình — dễ lẫn với Cat            |
+| Cat       | 0.438           | Yếu — hình dạng tương tự Dog         |
+| Chair     | 0.431           | Yếu — viền mờ trong bóng tối          |
 | Table     | **0.357** | Yếu nhất — phẳng, ít đặc trưng      |
 
 ### 6.4. Xu hướng Huấn luyện (Learning Curve Snapshot)
@@ -237,51 +248,54 @@ Do Pha 2 sử dụng lệnh `resume` không đúng cú pháp (truyền tham số
 
 ### 7.2. Bảng So Sánh Tổng Hợp: Pha 1 (EP50) vs Pha 2 (EP80)
 
-| Chỉ số | Pha 1 (EP50) | Pha 2 (EP80) | Δ Thay đổi | Đánh giá |
-|---|---|---|---|---|
-| **mAP50** | 0.569 (56.9%) | **0.636** (63.6%) | **+6.7%** | Cải thiện đáng kể |
-| **mAP50-95** | 0.340 (34.0%) | **0.393** (39.3%) | **+5.3%** | Cải thiện đáng kể |
-| Precision | 0.613 | **0.692** | +7.9% | Giảm dự đoán sai (False Positive) |
-| Recall | 0.528 | **0.575** | +4.7% | Phát hiện thêm vật thể bị bỏ sót |
-| F1 Score (best) | — | **0.63** @ conf=0.326 | — | Điểm cân bằng tối ưu giữa P và R |
-| Train box_loss | 1.385 | **1.220** | -11.9% | Định vị chính xác hơn |
-| Train cls_loss | 1.437 | **1.064** | -26.0% | Phân lớp sắc nét hơn |
-| Val box_loss | 1.476 | **1.439** | -2.5% | Gần bão hòa |
-| Val cls_loss | 1.535 | **1.328** | -13.5% | Vẫn cải thiện nhẹ |
-| Tổng thời gian | ~120 phút | +~132 phút | ~252 phút tổng | ~4.2 giờ trên RTX 3050 |
+| Chỉ số           | Pha 1 (EP50)  | Pha 2 (EP80)                | Δ Thay đổi    | Đánh giá                              |
+| ------------------ | ------------- | --------------------------- | ---------------- | ---------------------------------------- |
+| **mAP50**    | 0.569 (56.9%) | **0.636** (63.6%)     | **+6.7%**  | Cải thiện đáng kể                   |
+| **mAP50-95** | 0.340 (34.0%) | **0.393** (39.3%)     | **+5.3%**  | Cải thiện đáng kể                   |
+| Precision          | 0.613         | **0.692**             | +7.9%            | Giảm dự đoán sai (False Positive)    |
+| Recall             | 0.528         | **0.575**             | +4.7%            | Phát hiện thêm vật thể bị bỏ sót |
+| F1 Score (best)    | —            | **0.63** @ conf=0.326 | —               | Điểm cân bằng tối ưu giữa P và R |
+| Train box_loss     | 1.385         | **1.220**             | -11.9%           | Định vị chính xác hơn              |
+| Train cls_loss     | 1.437         | **1.064**             | -26.0%           | Phân lớp sắc nét hơn                |
+| Val box_loss       | 1.476         | **1.439**             | -2.5%            | Gần bão hòa                           |
+| Val cls_loss       | 1.535         | **1.328**             | -13.5%           | Vẫn cải thiện nhẹ                    |
+| Tổng thời gian   | ~120 phút    | +~132 phút                 | ~252 phút tổng | ~4.2 giờ trên RTX 3050                 |
 
 ### 7.3. Bảng mAP50 Theo Từng Lớp — So Sánh Pha 1 vs Pha 2
 
-| Hạng | Lớp | mAP50 (EP50) | mAP50 (EP80) | Δ | Nhận xét |
-|---|---|---|---|---|---|
-| 1 | **Bus** | 0.817 | **0.874** | +5.7% | Vật thể lớn nhất, hình khối vuông vắn, phản quang mạnh |
-| 2 | **Car** | 0.679 | **0.740** | +6.1% | Lớp phổ biến, dễ nhận biết nhờ đèn pha |
-| 3 | **Bicycle** | 0.680 | **0.733** | +5.3% | Khung kim loại tạo viền sáng trong tối |
-| 4 | **People** | 0.671 | **0.711** | +4.0% | Lớp xuất hiện nhiều nhất trong tập ExDark |
-| 5 | **Motorbike** | 0.597 | **0.673** | +7.6% | Cải thiện rất mạnh |
-| 6 | **Bottle** | 0.581 | **0.631** | +5.0% | Vật nhỏ, khó nhận diện trong tối |
-| 7 | **Boat** | 0.559 | **0.608** | +4.9% | Phản chiếu mặt nước gây nhiễu |
-| 8 | **Cup** | 0.512 | **0.592** | +8.0% | Bứt phá tốt, vật rất nhỏ |
-| 9 | **Dog** | 0.508 | **0.573** | +6.5% | Vẫn nhầm lẫn với Cat (23% Dog → Cat) |
-| 10 | **Cat** | 0.438 | **0.540** | +10.2% | Cải thiện mạnh nhất theo tỷ lệ phần trăm |
-| 11 | **Chair** | 0.431 | **0.492** | +6.1% | Viền phẳng, hòa lẫn vào nền tối |
-| 12 | **Table** | 0.357 | **0.449** | +9.2% | Yếu nhất nhưng tiến bộ vượt bậc |
+| Hạng | Lớp                | mAP50 (EP50) | mAP50 (EP80)    | Δ     | Nhận xét                                                       |
+| ----- | ------------------- | ------------ | --------------- | ------ | ---------------------------------------------------------------- |
+| 1     | **Bus**       | 0.817        | **0.874** | +5.7%  | Vật thể lớn nhất, hình khối vuông vắn, phản quang mạnh |
+| 2     | **Car**       | 0.679        | **0.740** | +6.1%  | Lớp phổ biến, dễ nhận biết nhờ đèn pha                  |
+| 3     | **Bicycle**   | 0.680        | **0.733** | +5.3%  | Khung kim loại tạo viền sáng trong tối                      |
+| 4     | **People**    | 0.671        | **0.711** | +4.0%  | Lớp xuất hiện nhiều nhất trong tập ExDark                  |
+| 5     | **Motorbike** | 0.597        | **0.673** | +7.6%  | Cải thiện rất mạnh                                           |
+| 6     | **Bottle**    | 0.581        | **0.631** | +5.0%  | Vật nhỏ, khó nhận diện trong tối                           |
+| 7     | **Boat**      | 0.559        | **0.608** | +4.9%  | Phản chiếu mặt nước gây nhiễu                             |
+| 8     | **Cup**       | 0.512        | **0.592** | +8.0%  | Bứt phá tốt, vật rất nhỏ                                   |
+| 9     | **Dog**       | 0.508        | **0.573** | +6.5%  | Vẫn nhầm lẫn với Cat (23% Dog → Cat)                        |
+| 10    | **Cat**       | 0.438        | **0.540** | +10.2% | Cải thiện mạnh nhất theo tỷ lệ phần trăm                 |
+| 11    | **Chair**     | 0.431        | **0.492** | +6.1%  | Viền phẳng, hòa lẫn vào nền tối                           |
+| 12    | **Table**     | 0.357        | **0.449** | +9.2%  | Yếu nhất nhưng tiến bộ vượt bậc                          |
 
 ### 7.4. Phân Tích Ma Trận Nhầm Lẫn (Confusion Matrix Analysis)
 
 Ma trận nhầm lẫn chuẩn hóa (Normalized Confusion Matrix) tiết lộ các mẫu hình nhận diện sai có hệ thống trong điều kiện thiếu sáng:
 
 **Nhóm 1 — Nhận diện xuất sắc (Đường chéo chính ≥ 0.65):**
+
 - **Bus (0.79)**: Gần hoàn hảo. Chỉ 1% nhầm sang Car (hợp lý vì cùng phương tiện giao thông).
 - **Car (0.73)**: Rất mạnh. 3% nhầm sang Bus, 14% bị Background nuốt.
 - **Bicycle (0.71)**: Khung xe kim loại phản sáng tạo đặc trưng viền rõ ràng.
 - **People (0.65)**: Ổn định. 28% bị Background nuốt (người đứng xa, tối).
 
 **Nhóm 2 — Nhầm lẫn liên lớp có hệ thống (Cross-class Confusion):**
+
 - **Dog ↔ Cat**: 23% Dog bị dự đoán nhầm thành Cat; 15% Cat bị dự đoán nhầm thành Dog. Trong điều kiện ánh sáng cực yếu, hình dáng bốn chân của 2 loài gần như giống hệt nhau. Đây là giới hạn vật lý của detector khi thiếu thông tin màu sắc/kết cấu lông.
 - **Motorbike ↔ Bicycle**: 4% Motorbike nhầm thành Bicycle. Hợp lý vì cùng là xe 2 bánh, chỉ khác kích thước.
 
 **Nhóm 3 — Bị Background "nuốt" (False Negative nặng):**
+
 - **Chair (0.50)**: 50% ghế bị model bỏ sót hoàn toàn, xếp vào nền. Viền ghế phẳng, mỏng, hòa lẫn vào bóng tối.
 - **Bottle (0.42)**: 42% chai bị bỏ sót. Vật thể rất nhỏ, độ phân giải thấp trong tối.
 - **Cup (0.40)**: 40% ly bị bỏ sót. Tương tự Bottle.
@@ -292,18 +306,19 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 ### 7.5. Phân Tích Xu Hướng Hội Tụ (Convergence Analysis)
 
 | Epoch | train/box_loss | train/cls_loss | val/box_loss | val/cls_loss | mAP50 | mAP50-95 |
-|---|---|---|---|---|---|---|
-| 1 | 1.562 | 1.882 | 1.680 | 1.941 | 0.411 | 0.227 |
-| 10 | 1.555 | 1.854 | 1.602 | 1.798 | 0.462 | 0.263 |
-| 20 | 1.524 | 1.751 | 1.563 | 1.685 | 0.517 | 0.300 |
-| 30 | 1.475 | 1.642 | 1.505 | 1.563 | 0.556 | 0.330 |
-| 40 | 1.434 | 1.555 | 1.476 | 1.479 | 0.583 | 0.348 |
-| 50 | 1.384 | 1.436 | 1.456 | 1.408 | 0.612 | 0.372 |
-| 60 | 1.350 | 1.363 | 1.445 | 1.371 | 0.622 | 0.380 |
-| 70 | 1.318 | 1.293 | 1.437 | 1.343 | 0.629 | 0.389 |
-| 80 | 1.220 | 1.064 | 1.439 | 1.328 | 0.636 | 0.393 |
+| ----- | -------------- | -------------- | ------------ | ------------ | ----- | -------- |
+| 1     | 1.562          | 1.882          | 1.680        | 1.941        | 0.411 | 0.227    |
+| 10    | 1.555          | 1.854          | 1.602        | 1.798        | 0.462 | 0.263    |
+| 20    | 1.524          | 1.751          | 1.563        | 1.685        | 0.517 | 0.300    |
+| 30    | 1.475          | 1.642          | 1.505        | 1.563        | 0.556 | 0.330    |
+| 40    | 1.434          | 1.555          | 1.476        | 1.479        | 0.583 | 0.348    |
+| 50    | 1.384          | 1.436          | 1.456        | 1.408        | 0.612 | 0.372    |
+| 60    | 1.350          | 1.363          | 1.445        | 1.371        | 0.622 | 0.380    |
+| 70    | 1.318          | 1.293          | 1.437        | 1.343        | 0.629 | 0.389    |
+| 80    | 1.220          | 1.064          | 1.439        | 1.328        | 0.636 | 0.393    |
 
 **Nhận định hội tụ:**
+
 1. **Train Loss giảm mạnh liên tục**: `cls_loss` giảm từ 1.882 → 1.064 (-43.4%). Model ngày càng phân lớp sắc bén hơn trên tập huấn luyện.
 2. **Val Loss phẳng từ Epoch 60**: `val/box_loss` dao động quanh 1.44 (±0.005). `val/cls_loss` vẫn giảm nhẹ nhưng biên độ rất nhỏ (1.371 → 1.328).
 3. **Khoảng cách Train-Val nới rộng**: Dấu hiệu Overfitting nhẹ. Train box_loss = 1.220 trong khi Val box_loss = 1.439 (chênh lệch 0.219). Tuy nhiên, mAP vẫn tăng nhẹ nên chưa gây hại thực tế.
@@ -318,38 +333,39 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 
 **Hồ sơ trọng số lưu trữ:**
 
-| File | Dung lượng | Mô tả |
-|---|---|---|
-| `weights/best.pt` | 5.2 MB | Trọng số tốt nhất trong suốt 80 Epoch. Dùng cho Inference. |
-| `weights/last.pt` | 5.2 MB | Trọng số Epoch cuối cùng (80). Kích thước trùng best → best ≈ last. |
-| `weights/best_epoch50.pt` | 20.3 MB | Sao lưu trọng số tốt nhất Pha 1 (bao gồm Optimizer State). |
-| `weights/last_epoch50.pt` | 20.3 MB | Sao lưu trọng số cuối Pha 1 (bao gồm Optimizer State). |
-| `milestone_epoch50/results_epoch50.csv` | 6.0 KB | Bảng số liệu 50 Epoch đầu tiên (khôi phục từ bộ nhớ agent). |
-| `results.csv` | 9.9 KB | Bảng số liệu 80 Epoch Pha 2 (file chính thức). |
+| File                                      | Dung lượng | Mô tả                                                                       |
+| ----------------------------------------- | ------------ | ----------------------------------------------------------------------------- |
+| `weights/best.pt`                       | 5.2 MB       | Trọng số tốt nhất trong suốt 80 Epoch. Dùng cho Inference.              |
+| `weights/last.pt`                       | 5.2 MB       | Trọng số Epoch cuối cùng (80). Kích thước trùng best → best ≈ last. |
+| `weights/best_epoch50.pt`               | 20.3 MB      | Sao lưu trọng số tốt nhất Pha 1 (bao gồm Optimizer State).              |
+| `weights/last_epoch50.pt`               | 20.3 MB      | Sao lưu trọng số cuối Pha 1 (bao gồm Optimizer State).                   |
+| `milestone_epoch50/results_epoch50.csv` | 6.0 KB       | Bảng số liệu 50 Epoch đầu tiên (khôi phục từ bộ nhớ agent).        |
+| `results.csv`                           | 9.9 KB       | Bảng số liệu 80 Epoch Pha 2 (file chính thức).                           |
 
 ---
 
 ## 8. Nhật Ký Sự Cố & Bài Học Kinh Nghiệm (Incident Log)
 
-| #   | Sự cố                                     | Nguyên nhân                                     | Giải pháp                                                                                                                          |
-| --- | ----------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `SyntaxError: accumulate=8`               | Ultralytics đã xóa tham số`accumulate` khỏi API | Xóa tham số, để Auto-Accumulate ngầm định                                                                                          |
-| 2   | `yolo26n.pt` xuất hiện trong notebooks/   | AMP Check tự tải model nháp từ GitHub           | Xóa thủ công (file rác, 5.5MB)                                                                                                     |
-| 3   | RAM 95%+ dù dùng`cache='disk'`            | Windows Standby Cache + 8 workers spawn         | Hiện tượng By Design, an toàn, kệ                                                                                                  |
-| 4   | Resume Training chạy 80 epoch thay vì +30 | Truyền params thừa cùng`resume=True`            | Cú pháp đúng: chỉ cần`model.train(resume=True)` không truyền gì thêm. Chấp nhận để chạy tiếp 80 epoch (tổng ~130 epoch kiến thức). |
-| 5   | `results.csv` bị xóa khi Resume           | YOLO reset file khi nhận`resume` sai cách       | Khôi phục từ bộ nhớ agent →`milestone_epoch50/results_epoch50.csv`                                                                 |
+| # | Sự cố                                     | Nguyên nhân                                          | Giải pháp                                                                                                                                             |
+| - | ------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | `SyntaxError: accumulate=8`               | Ultralytics đã xóa tham số`accumulate` khỏi API | Xóa tham số, để Auto-Accumulate ngầm định                                                                                                        |
+| 2 | `yolo26n.pt` xuất hiện trong notebooks/ | AMP Check tự tải model nháp từ GitHub              | Xóa thủ công (file rác, 5.5MB)                                                                                                                      |
+| 3 | RAM 95%+ dù dùng`cache='disk'`          | Windows Standby Cache + 8 workers spawn                | Hiện tượng By Design, an toàn, kệ                                                                                                                  |
+| 4 | Resume Training chạy 80 epoch thay vì +30 | Truyền params thừa cùng`resume=True`              | Cú pháp đúng: chỉ cần`model.train(resume=True)` không truyền gì thêm. Chấp nhận để chạy tiếp 80 epoch (tổng ~130 epoch kiến thức). |
+| 5 | `results.csv` bị xóa khi Resume         | YOLO reset file khi nhận`resume` sai cách          | Khôi phục từ bộ nhớ agent →`milestone_epoch50/results_epoch50.csv`                                                                              |
 
 ---
 
 ## 9. Bảng Theo Dõi Tiến Độ (Task Tracker Checklist)
 
 - `[x]` **Giai đoạn 1: Khởi tạo Project & Môi trường (Environment Setup)**
+
   - `[x]` Thiết lập cấu trúc thư mục quy chuẩn (`data`, `notebooks`, `models`, `docs`, `scripts`).
   - `[x]` Khởi tạo môi trường ảo `venv` và cài đặt Jupyter Kernel (`project final DAT301m`).
   - `[x]` Cài đặt thư viện cốt lõi: PyTorch CUDA 12.1, TensorFlow 2.10 (Numpy < 2), Ultralytics YOLO.
   - `[x]` Tổ chức tài liệu tham khảo vào thư mục `docs/`.
-
 - `[x]` **Giai đoạn 2: Convert Data & Tiền xử lý**
+
   - `[x]` Khởi tạo Notebook `01_data_conversion.ipynb`.
   - `[x]` Xây dựng thuật toán phân tích XML/txt cho ExDark, cấu hình hàm cắt viền (clip) giới hạn tọa độ.
   - `[x]` Xây dựng quy trình tạo tập dữ liệu cơ sở `CLAHE + Median Filter`.
@@ -357,8 +373,8 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
   - `[x]` Xây dựng kịch bản xử lý luồng JSON cho BDD100k (ijson stream), phân tách ảnh `night` và lọc nhiễu `occluded`.
   - `[x]` Lưu trữ bảo lưu dữ liệu ban ngày của BDD100k làm Domain Mẫu (Ground Truth) cho pha huấn luyện GAN.
   - `[x]` **Hoàn tất**: Đã thực thi thành công toàn bộ Notebook `01_data_conversion.ipynb` và nghiệm thu dữ liệu đầu ra.
-
 - `[/]` **Giai đoạn 3: Huấn luyện & Đánh giá YOLOv11 (2 Model Độc Lập)**
+
   - `[x]` Quyết định thiết kế: Huấn luyện 2 mô hình YOLO độc lập (ExDark 12 classes, BDD100k 10 classes). Hủy bỏ Auto-Evolve để giảm tải tính toán.
   - `[x]` Khởi tạo thành công Notebook `02_train_exdark.ipynb` và `03_train_bdd100k.ipynb`.
   - `[x]` Cấu hình siêu tham số chống tràn RAM: YOLO11n, Batch=8, Auto-Accumulate, Cache=Disk.
@@ -372,8 +388,8 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
   - `[ ]` Đánh giá mAP theo tiêu chuẩn COCO (mAP50-95).
   - `[ ]` Đánh giá mAP trên tập Tiền xử lý (`CLAHE`).
   - `[ ]` Trực quan hóa dữ liệu mAP và xuất báo cáo.
-
 - `[ ]` **Giai đoạn 4: Inference GAN (Đang Pending)**
+
   - `[x]` Thiết lập cấu hình môi trường TF 2.10 + Numpy < 2.0 chuyên biệt (Đã thực hiện tại GĐ1).
   - `[ ]` Triển khai quy trình Inference xử lý ảnh chống tràn VRAM.
   - `[ ]` Đánh giá mAP của tập ảnh Tăng cường (`Enhanced`).
@@ -383,9 +399,9 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 
 ## 10. Tệp Rác Cần Dọn Dẹp (Cleanup)
 
-| File                | Vị trí                           | Lý do                                                |
-| ------------------- | -------------------------------- | ---------------------------------------------------- |
-| `yolo26n.pt`        | `notebooks/`                     | File nháp AMP Check, 5.5MB rác (Đã xóa)              |
-| `models/pretrained` | Thư mục                          | Đã xóa, chuyển `yolo11n.pt` về chung thư mục notebook|
-| `exdark_train` (cũ) | `models/runs/`                   | Kết quả lần train lỗi đầu tiên (nếu còn)             |
-| `labels.cache`      | `data/processed/train/` & `val/` | File cache YOLO, xóa được sau khi train xong         |
+| File                   | Vị trí                             | Lý do                                                        |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------- |
+| `yolo26n.pt`         | `notebooks/`                       | File nháp AMP Check, 5.5MB rác (Đã xóa)                  |
+| `models/pretrained`  | Thư mục                            | Đã xóa, chuyển`yolo11n.pt` về chung thư mục notebook |
+| `exdark_train` (cũ) | `models/runs/`                     | Kết quả lần train lỗi đầu tiên (nếu còn)             |
+| `labels.cache`       | `data/processed/train/` & `val/` | File cache YOLO, xóa được sau khi train xong              |
