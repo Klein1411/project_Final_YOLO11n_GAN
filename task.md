@@ -96,11 +96,12 @@ D:/DAT301m/proposal/
 - **Chiến lược Phân tích (Parsing)**: Bắt buộc sử dụng kỹ thuật luồng (stream parsing) qua thư viện `ijson` để tránh tràn RAM (OOM) khi nạp file 1.4GB.
 - **Hệ tọa độ**: 0-indexed, cấu trúc Box2D (`x1, y1, x2, y2`) chuẩn xác trên độ phân giải 1280x720. Cần chuẩn hóa về `[x_center, y_center, w, h]` trong khoảng `[0, 1]` cho YOLO.
 - **Cơ cấu phân lớp (Classes)**: Giới hạn chuyên sâu trong 10 lớp giao thông tự hành (Pedestrian, Rider, Car, Truck, Bus, Train, Motorcycle, Bicycle, Traffic light, Traffic sign).
-- **Phân loại môi trường & Tách Miền (Domain Split)**:
-  - Ảnh `daytime` (~52k): Được trích xuất thành miền `bdd_day`. Sử dụng làm nền tảng huấn luyện cơ sở (Base Training) cho YOLO và làm Ground Truth cho GAN.
-  - Ảnh `night` (~39k): Được trích xuất thành miền `bdd_night`. Nơi tiến hành Fine-tune chuyên sâu.
-  - Ảnh `dawn/dusk`: Bị loại bỏ hoàn toàn để tránh nhiễu tranh tối tranh sáng.
-- **Kiểm soát nhiễu**: Loại bỏ các Box có cờ `occluded=True` nhằm giảm thiểu dao động trong hàm Loss.
+- **Phân loại môi trường & Tách Miền (Domain Split)**: Dựa trên quá trình quét và trích xuất thực tế:
+  - Ảnh `daytime` (Tổng cộng 41,986 ảnh): Được trích xuất thành miền `bdd_day` (36,728 Train / 5,258 Val). Sử dụng làm nền tảng huấn luyện cơ sở (Base Training) cho YOLO.
+  - Ảnh `night` (Tổng cộng 31,900 ảnh): Được trích xuất thành miền `bdd_night` (27,971 Train / 3,929 Val). Nơi tiến hành Fine-tune chuyên sâu ở mô hình sau.
+  - Ảnh `dawn/dusk` (Tổng cộng 5,805 ảnh): Bị loại bỏ hoàn toàn để tránh nhiễu ranh giới phân phối sáng/tối.
+- **Đặc điểm cấu trúc vật lý Kaggle (CycleGAN Format)**: Dữ liệu tải từ Kaggle không lưu ảnh phẳng trong thư mục `images/train/`, mà bị phân tán ngầm vào các thư mục con (ví dụ: `images/train/trainA`). Điều này bắt buộc hệ thống tiền xử lý phải triển khai thuật toán lập bản đồ đường dẫn đệ quy (Recursive Path Mapping) để tìm lại file vật lý dựa trên tên file ghi trong JSON.
+- **Kiểm soát nhiễu (Occlusion Policy)**: Quyết định bảo lưu (KHÔNG LỌC) toàn bộ các Bounding Box có cờ `occluded=True` và `truncated=True`. Điều này ép mô hình học cách nội suy các đối tượng bị che khuất/cắt xén một phần, phản ánh đúng tình trạng giao thông đô thị đông đúc ngoài thực tế.
 
 ### 4.4. Chiến Lược Quản Trị Dung Lượng (Symlink vs Physical Copy)
 
@@ -108,15 +109,16 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 
 1. **ExDark**: Sử dụng `shutil.copy()` (Physical Copy). Tốn thêm vài trăm MB, tốc độ cực nhanh, an toàn tuyệt đối khỏi các lỗi phân quyền HĐH. Phù hợp vì sau đó cần áp dụng bộ lọc CLAHE lên file ảnh copy.
 2. **BDD100k**: Sử dụng `os.symlink()` (Symbolic Link). YOLO sẽ đọc "lối tắt" trỏ về file Raw thay vì copy vật lý, giúp tiết kiệm triệt để ~15GB SSD. Không cần resize ảnh vì YOLO hỗ trợ _Dynamic Letterboxing_.
-   - _Cơ chế Fallback (Tự chữa cháy)_: Trên Windows, tạo Symlink đòi hỏi quyền Administrator/Developer Mode. Script `preprocess_bdd100k.py` được thiết kế thông minh: cố gắng tạo Symlink, nếu HĐH báo lỗi PermissionError thì tự động chuyển sang Physical Copy để đảm bảo không đứt gãy luồng thực thi.
+   - _Cơ chế Fallback (Tự chữa cháy)_: Trên Windows, tạo Symlink đòi hỏi quyền Administrator/Developer Mode. Notebook `01b_preprocess_bdd100k.ipynb` được thiết kế thông minh: cố gắng tạo Symlink, nếu HĐH báo lỗi PermissionError thì tự động chuyển sang Physical Copy để đảm bảo không đứt gãy luồng thực thi.
 
 ### 4.3. Kiểm kê Dữ liệu Thực tế (Data Inventory)
 
-| Thư mục                | Train                  | Val                    | Ghi chú                              |
-| ---------------------- | ---------------------- | ---------------------- | ------------------------------------ |
-| `processed/` (ExDark)  | 5,890 ảnh + 5,890 nhãn | 1,472 ảnh + 1,472 nhãn | Đang sử dụng                         |
-| `processed/` (BDD100k) | ** CHƯA CÓ**           | ** CHƯA CÓ**           | Cần chạy lại Data Conversion cho BDD |
-| `clahe_baseline/`      | 11,780 files           | 2,944 files            | Sẵn sàng (ExDark + nhãn)             |
+| Thư mục                  | Train                    | Val                      | Ghi chú                              |
+| ------------------------ | ------------------------ | ------------------------ | ------------------------------------ |
+| `processed/` (ExDark)    | 5,890 ảnh + 5,890 nhãn   | 1,472 ảnh + 1,472 nhãn   | Đã huấn luyện xong Phase 1 & 2       |
+| `processed/bdd_day`      | 36,728 ảnh + 36,728 nhãn | 5,258 ảnh + 5,258 nhãn   | Sẵn sàng cho Base Training           |
+| `processed/bdd_night`    | 27,971 ảnh + 27,971 nhãn | 3,929 ảnh + 3,929 nhãn   | Sẵn sàng cho Fine-tuning             |
+| `clahe_baseline/`        | 11,780 files             | 2,944 files              | Sẵn sàng (ExDark + nhãn)             |
 | `enhanced/` (GAN)      | —                      | —                      | Pending Giai đoạn 4                  |
 
 ---
@@ -128,7 +130,7 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 - **Mục tiêu**: Chuyển đổi dữ liệu thô sang định dạng nhãn YOLO (0-indexed).
 - **Xử lý tập ExDark**: Tọa độ nguyên bản là 1-indexed, cần được dịch chỉnh về 0-indexed. Loại bỏ các header không hợp lệ (`% bbGt`). Áp dụng hàm `np.clip(tọa_độ, 0, 1)` để ngăn ngừa lỗi tọa độ vượt biên (Out of bounds) gây ra hiện tượng Loss = NaN trong quá trình huấn luyện.
 
-### `scripts/preprocess_bdd100k.py` (Tiền xử lý BDD100k - Tách Miền/Domain Split)
+### `notebooks/01b_preprocess_bdd100k.ipynb` (Tiền xử lý BDD100k - Tách Miền/Domain Split)
 
 - **Vấn đề**: BDD100k có 1.4GB JSON và 100k ảnh. Nếu gộp chung Day/Night, YOLO sẽ học rất tốt nhưng bị "bias" (thiên lệch) về ảnh ban ngày, làm mất đi giá trị của mô-đun GAN ở Giai đoạn 4.
 - **Giải pháp**: Phân tách BDD100k thành 2 tập độc lập `bdd_day` và `bdd_night` (loại bỏ hoàn toàn thẻ thời tiết lấp lửng `dawn/dusk`).
@@ -363,9 +365,9 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
   - `[x]` Cấu hình cơ chế chống Overfit: Patience=15, Mosaic=0.5, Close_Mosaic=10, AdamW.
   - `[x]` **Hoàn tất Pha 1**: ExDark 50 Epochs → mAP50=0.569, mAP50-95=0.340. Sao lưu mốc `milestone_epoch50/`.
   - `[x]` **Hoàn tất Pha 2**: ExDark +80 Epochs từ trọng số Epoch 50 → mAP50=**0.636** (+6.7%), mAP50-95=**0.393** (+5.3%). Model bão hòa từ EP65. Khóa sổ.
-  - `[x]` **Chuẩn bị BDD100k**: Đã viết thành công `scripts/preprocess_bdd100k.py` với cơ chế ijson stream và Auto-Fallback Symlink/Copy.
-  - `[ ]` Chạy `scripts/preprocess_bdd100k.py` để tách ~52k ảnh Day và ~39k ảnh Night. (GPU đã rảnh)
-  - `[ ]` Huấn luyện mô hình YOLO11n trên tập Ban ngày (`bdd_day`) để tạo Base Model.
+  - `[x]` **Chuẩn bị BDD100k**: Đã thiết kế thành công `notebooks/01b_preprocess_bdd100k.ipynb` với cơ chế ijson stream và Auto-Fallback Symlink/Copy (Thay thế cho script cũ).
+  - `[x]` Chạy `01b_preprocess_bdd100k.ipynb` để tách miền BDD100k. Kết quả thực tế thu được: **36,728 ảnh Day (train) / 5,258 ảnh Day (val)** và **27,971 ảnh Night (train) / 3,929 ảnh Night (val)**.
+  - `[/]` Huấn luyện mô hình YOLO11n trên tập Ban ngày (`bdd_day`) để tạo Base Model.
   - `[ ]` Fine-tune mô hình YOLO11n trên tập Ban đêm (`bdd_night`) từ trọng số Base.
   - `[ ]` Đánh giá mAP theo tiêu chuẩn COCO (mAP50-95).
   - `[ ]` Đánh giá mAP trên tập Tiền xử lý (`CLAHE`).
