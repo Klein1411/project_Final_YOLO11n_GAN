@@ -23,9 +23,10 @@ data/enhanced/
 
 # 3. Model Trọng Số (Chỉ chặn file rác/pretrained)
 # Các file trong models/runs/ (best.pt, biểu đồ PNG) sẽ được đẩy lên để khoe kết quả!
-models/pretrained/
-yolo11n.pt
-yolo26n.pt
+notebooks/*.pt
+
+# Bỏ qua thư mục scripts
+scripts/
 
 # 4. Tệp hệ thống OS
 .DS_Store

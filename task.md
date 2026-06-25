@@ -64,9 +64,9 @@ D:/DAT301m/proposal/
 │   ├── 01_data_conversion.ipynb # Tiền xử lý, chuẩn hóa tọa độ, phân tách.
 │   ├── 02_train_exdark.ipynb    # Huấn luyện ExDark (Pha 1: 50 Epochs).
 │   ├── 02b_resume_exdark.ipynb  # Resume ExDark (+80 Epochs từ trọng số Epoch 50).
-│   └── 03_train_bdd100k.ipynb   # Huấn luyện BDD100k (Chờ xử lý).
+│   ├── 03_train_bdd100k.ipynb   # Huấn luyện BDD100k (Chờ xử lý).
+│   └── yolo11n.pt               # Trọng số khởi tạo COCO gốc (Tự động tải).
 ├── models/
-│   ├── pretrained/              # Trọng số khởi tạo (yolo11n.pt).
 │   └── runs/exdark_train-2/     # Kết quả huấn luyện ExDark (đang chạy).
 │       ├── weights/             # best.pt, last.pt, best_epoch50.pt, last_epoch50.pt
 │       ├── milestone_epoch50/   # Sao lưu mốc lịch sử Pha 1.
@@ -383,7 +383,7 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 
 | File                | Vị trí                           | Lý do                                                |
 | ------------------- | -------------------------------- | ---------------------------------------------------- |
-| `yolo26n.pt`        | `notebooks/`                     | File nháp AMP Check, 5.5MB rác                       |
-| `yolo11n.pt`        | `notebooks/`                     | Bản sao trọng số COCO, nên nằm ở`models/pretrained/` |
+| `yolo26n.pt`        | `notebooks/`                     | File nháp AMP Check, 5.5MB rác (Đã xóa)              |
+| `models/pretrained` | Thư mục                          | Đã xóa, chuyển `yolo11n.pt` về chung thư mục notebook|
 | `exdark_train` (cũ) | `models/runs/`                   | Kết quả lần train lỗi đầu tiên (nếu còn)             |
 | `labels.cache`      | `data/processed/train/` & `val/` | File cache YOLO, xóa được sau khi train xong         |
