@@ -108,7 +108,7 @@ D:/DAT301m/proposal/
 Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~100k ảnh), dự án áp dụng 2 chiến lược quản lý file khác nhau:
 
 1. **ExDark**: Sử dụng `shutil.copy()` (Physical Copy). Tốn thêm vài trăm MB, tốc độ cực nhanh, an toàn tuyệt đối khỏi các lỗi phân quyền HĐH. Phù hợp vì sau đó cần áp dụng bộ lọc CLAHE lên file ảnh copy.
-2. **BDD100k**: Sử dụng `os.symlink()` (Symbolic Link). YOLO sẽ đọc "lối tắt" trỏ về file Raw thay vì copy vật lý, giúp tiết kiệm triệt để ~15GB SSD. Không cần resize ảnh vì YOLO hỗ trợ _Dynamic Letterboxing_.
+2. **BDD100k**: Sử dụng `os.symlink()` (Symbolic Link). YOLO sẽ đọc "lối tắt" trỏ về file Raw thay vì copy vật lý, giúp tiết kiệm triệt để ~15GB SSD. Không cần resize ảnh vì YOLO hỗ trợ _Dynamic Letterboxing_. (Lưu ý: Quá trình Disk Cache sẽ sinh ra khoảng 108GB bộ đệm do giải nén toàn bộ ảnh gốc HD 1280x720).
    - _Cơ chế Fallback (Tự chữa cháy)_: Trên Windows, tạo Symlink đòi hỏi quyền Administrator/Developer Mode. Notebook `01b_preprocess_bdd100k.ipynb` được thiết kế thông minh: cố gắng tạo Symlink, nếu HĐH báo lỗi PermissionError thì tự động chuyển sang Physical Copy để đảm bảo không đứt gãy luồng thực thi.
 
 ### 4.3. Kiểm kê Dữ liệu Thực tế (Data Inventory)
@@ -147,18 +147,17 @@ Do sự chênh lệch khổng lồ về quy mô (ExDark ~7k ảnh vs BDD100k ~10
 - **Thiết kế Độc Lập**: Triển khai huấn luyện 2 mô hình YOLO biệt lập cho ExDark (12 lớp) và BDD100k (10 lớp) để loại trừ xung đột không gian nhãn.
 - **Ràng buộc thay thế Output Head (Head Replacement Constraint)**: Hệ thống BẮT BUỘC phải tiến hành Base Training trên `bdd_day` thay vì sử dụng trực tiếp trọng số `yolo11n.pt` nguyên bản. Dưới đây là bằng chứng thực chứng (Zero-shot Assessment) giải thích lý do:
 
-
   **Hậu quả nếu không huấn luyện lại (Lệch pha nhãn - Mismatch):**
 
   1. **Nhiễu ngoại lai (Out-of-Distribution Hallucination):** Ở Mẫu 3, mô hình nhận diện sai một cái bóng râm thành `bench` (ghế đá). `Bench` là lớp thuộc COCO, hoàn toàn không tồn tại trong từ điển 10 lớp giao thông của BDD100k. Việc sử dụng trực tiếp sẽ gây ô nhiễm dữ liệu đầu ra và làm sai lệch mAP.
   2. **Lệch chỉ số ID (Class ID Drift):** Bảng mã COCO (Xe tải = ID 7) xung đột kịch liệt với bảng mã BDD100k (Xe tải = ID 3). Mọi phương tiện "Xe tải" nhận diện được sẽ bị hệ thống đánh giá chấm sai thành lớp khác (ví dụ: Xe đạp).
 
   **Kết luận kỹ thuật:** Việc khởi chạy lệnh `model.train(data='bdd_day.yaml')` là bắt buộc để thuật toán tự động **chặt bỏ** lớp Classification Head 80-Class cũ của COCO, và khởi tạo lại ngẫu nhiên một ma trận 10-Class chuẩn hóa chuyên biệt cho BDD100k. Quá trình này giữ nguyên kỹ năng thị giác (Backbone) nhưng dạy lại mô hình cách "gọi tên" chuẩn xác.
-- **Tối ưu hóa Tài nguyên (4GB VRAM Constraint)**: Bắt buộc triển khai kiến trúc **YOLO11n (Nano)** với ~2.6 triệu tham số. Khóa cứng kích thước vật lý `batch_size=8` để tránh tràn bộ nhớ (Out of Memory). Hệ thống tự động nội suy kỹ thuật **Auto-Accumulate** (64 / Batch = 8) nhằm mô phỏng kích thước lô ảo lên 64, giúp ổn định đạo hàm mà không vi phạm cú pháp API mới của Ultralytics.
+- **Tối ưu hóa Tài nguyên (4GB VRAM Constraint)**: Bắt buộc triển khai kiến trúc **YOLO11n (Nano)** với ~2.6 triệu tham số. Khóa cứng kích thước vật lý `batch_size=8` để tránh tràn bộ nhớ (Out of Memory). Hệ thống tự động nội suy kỹ thuật **Auto-Accumulate** (64 / Batch = 8) nhằm mô phỏng kích thước lô ảo lên 64, giúp ổn định đạo hàm mà không vi phạm cú pháp API mới của Ultralytics.\n- **Tính Tái tạo (Reproducibility)**: Khóa cứng `seed=0` (hoặc 42) theo chuẩn học thuật để đảm bảo mô hình hội tụ ra kết quả y hệt nhau ở mọi lần chạy.
 - **Quản trị Khủng hoảng System RAM (Windows Standby Cache & Multi-processing)**:
 
-  - _Nút thắt cổ chai (Bottleneck)_: Trong môi trường Windows, thư viện PyTorch kích hoạt đa luồng (multi-processing) thông qua cơ chế `spawn` (tạo mới quy trình) thay vì `fork` (sao chép quy trình). Tham số mặc định `workers=8` yêu cầu cấp phát 8 phiên bản bộ nhớ độc lập cho DataLoader, làm bùng nổ xung đột không gian nhớ.
-  - _Cơ chế Caching Ổ cứng (`cache='disk'`)_: Thay vì để CPU liên tục giải nén ảnh JPEG và nội suy kích thước (Dynamic Letterboxing) theo thời gian thực (gây quá tải CPU), hệ thống được lệnh tiền xử lý toàn bộ tập dữ liệu thành các ma trận NumPy thuần túy (uncompressed tensors) và ghi thẳng xuống SSD. Quá trình này tiêu tốn 12.5 GB dung lượng vật lý, nhưng triệt tiêu hoàn toàn độ trễ giải nén.
+  - _Nút thắt cổ chai (Bottleneck)_: Trong môi trường Windows, thư viện PyTorch kích hoạt đa luồng (multi-processing) thông qua cơ chế `spawn`. Đã giảm cứng tham số `workers=4` thay vì 8 mặc định để chống lỗi quá tải thread, đồng thời chọn giải thuật tối ưu `optimizer='auto'` (chọn MuSGD thay vì AdamW) nhằm phù hợp với lượng ảnh khổng lồ.
+  - _Cơ chế Caching Ổ cứng (`cache='disk'`)_: Thay vì để CPU liên tục giải nén ảnh JPEG và nội suy kích thước (Dynamic Letterboxing) theo thời gian thực (gây quá tải CPU), hệ thống được lệnh tiền xử lý toàn bộ tập dữ liệu thành các ma trận NumPy thuần túy (uncompressed tensors) và ghi thẳng xuống SSD. Quá trình này giải nén nguyên bản ảnh HD chưa resize, tiêu tốn khoảng 124.28 GB dung lượng vật lý (.npy và .cache), nhưng triệt tiêu hoàn toàn độ trễ giải nén.
   - _Hiện tượng Ảo ảnh Bộ nhớ (Memory Mirage)_: Khi đọc liên tục file `.cache` 12.5 GB từ SSD, Windows OS Memory Manager tự động thu hồi toàn bộ RAM nhàn rỗi để đưa vào danh sách chờ (`Standby List`), biến RAM thành một bộ đệm siêu tốc (Disk Cache). Dù Task Manager báo động đỏ System RAM chạm mức 95%+, thực tế đây chỉ là "RAM Ảo". Lượng RAM này sẽ lập tức được hệ điều hành giải phóng (evicted) nếu có tiến trình ưu tiên cao hơn yêu cầu cấp phát. Đây là hành vi thiết kế có chủ đích (By Design) và an toàn tuyệt đối.
 - **Cơ chế Chống Quá Khớp (Anti-Overfitting & Hallucination)**:
 
@@ -384,6 +383,7 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
   - `[x]` **Chuẩn bị BDD100k**: Đã thiết kế thành công `notebooks/01b_preprocess_bdd100k.ipynb` với cơ chế ijson stream và Auto-Fallback Symlink/Copy (Thay thế cho script cũ).
   - `[x]` Chạy `01b_preprocess_bdd100k.ipynb` để tách miền BDD100k. Kết quả thực tế thu được: **36,728 ảnh Day (train) / 5,258 ảnh Day (val)** và **27,971 ảnh Night (train) / 3,929 ảnh Night (val)**.
   - `[/]` Huấn luyện mô hình YOLO11n trên tập Ban ngày (`bdd_day`) để tạo Base Model.
+    - `[ ]` Khởi chạy mẻ Dry Run 20 Epochs với cấu hình an toàn (name='bdd_day_dry_run_ep20').
   - `[ ]` Fine-tune mô hình YOLO11n trên tập Ban đêm (`bdd_night`) từ trọng số Base.
   - `[ ]` Đánh giá mAP theo tiêu chuẩn COCO (mAP50-95).
   - `[ ]` Đánh giá mAP trên tập Tiền xử lý (`CLAHE`).
@@ -404,4 +404,4 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 | `yolo26n.pt`         | `notebooks/`                       | File nháp AMP Check, 5.5MB rác (Đã xóa)                  |
 | `models/pretrained`  | Thư mục                            | Đã xóa, chuyển`yolo11n.pt` về chung thư mục notebook |
 | `exdark_train` (cũ) | `models/runs/`                     | Kết quả lần train lỗi đầu tiên (nếu còn)             |
-| `labels.cache`       | `data/processed/train/` & `val/` | File cache YOLO, xóa được sau khi train xong              |
+| `labels.cache` và `*.npy` | `data/processed/` | Bộ đệm nén ảnh (Tổng 124.26 GB). Chi tiết:\n- `bdd_day/train/images`: 94.58 GB\n- `bdd_day/val/images`: 13.54 GB (Vừa tạo xong)\n- `exdark/train/images`: 12.49 GB\n- `exdark/val/images`: 3.65 GB\nXóa ngay sau khi train xong để giải phóng SSD. |
