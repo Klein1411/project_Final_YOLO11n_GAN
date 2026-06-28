@@ -343,7 +343,48 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 
 ---
 
-## 8. Nhật Ký Sự Cố & Bài Học Kinh Nghiệm (Incident Log)
+
+## 8. Kết Quả Huấn Luyện BDD100k Base Model (Pha 1: Dry Run 20 Epochs)
+
+### 8.1. Bảng Siêu Tham Số (Hyperparameters)
+| Tham số | Giá trị | Nhận xét |
+|---|---|---|
+| Model | YOLO11n (Nano) | Kiến trúc nhẹ nhất, tối ưu cho RTX 3050. |
+| Batch Size | 8 | Mức tối đa an toàn cho VRAM 4GB. |
+| Auto-Accumulate | 64/8 = 8 | Giả lập lô 64 để ổn định đạo hàm. |
+| Image Size | 640x640 | Dynamic Letterboxing. |
+| Optimizer | `auto` (MuSGD) | Cấu hình tự động cấp phát Learning Rate = 0.01. Khắc phục lỗi hội tụ chậm của AdamW. |
+| Workers | 4 | Giảm từ 8 xuống 4 để triệt tiêu lỗi spawn thread của Windows. |
+| Cache | disk (~95GB) | Tránh nổ RAM 24GB bằng cách đọc tensor trực tiếp từ SSD. |
+| Seed | 0 | Đóng băng ngẫu nhiên để đảm bảo tính tái tạo (Reproducibility). |
+| Thời gian train | ~4.1 tiếng | ~12 phút/Epoch, tốc độ lý tưởng. |
+
+### 8.2. Bảng Tổng Hợp Kết Quả mAP
+| Chỉ số | Mốc Epoch 20 | Tình trạng |
+|---|---|---|
+| **mAP50** | 44.4% | Cực kỳ triển vọng, đường Loss chưa bão hòa. |
+| **mAP50-95** | 26.1% | Đạt chuẩn trung bình cho bộ dataset cực khó. |
+| Precision | 70.1% | Tỷ lệ bắt trúng rất cao. |
+| Recall | 40.1% | Còn sót nhiều vật thể nhỏ/che khuất. |
+
+### 8.3. Phân Tích Độ Khó Theo Lớp (Per-Class Physics)
+| Lớp | mAP50 | Đánh giá Vật lý |
+|---|---|---|
+| **Car** | 73.8% | Xuất sắc. Khối lượng data áp đảo (57k instances). Hình học ổn định. |
+| **Truck** | 55.5% | Tốt. Vật thể lớn, đặc trưng rõ. |
+| **Bus** | 52.4% | Tốt. |
+| **Traffic Light** | 51.7% | Tốt. Tuy nhỏ nhưng phản quang đỏ/xanh/vàng tạo độ tương phản mạnh với nền. |
+| **Traffic Sign** | 51.2% | Tốt. Viền hình học sắc nét (Tròn, Tam giác). |
+| **Rider** | 26.1% | Kém. Dáng người đi xe đạp/máy thay đổi liên tục, bị dính liền khối với xe, dễ nhầm thành lớp Pedestrian. |
+| **Train** | 0.0% | Thất bại. Nguyên nhân: Mất cân bằng dữ liệu cực đoan (chỉ có 8 chiếc xe lửa trong tập Validation). Model bỏ qua lớp này. |
+
+**Đánh giá tổng thể & Hướng đi tiếp theo:**
+Model đã nắm được cốt lõi hình học của giao thông (Xe hơi, Biển báo, Đèn). Hàm Loss (`box_loss` giảm từ 1.47 -> 1.24) vẫn đang dốc thẳng đứng. Việc ngắt ở Epoch 20 là quyết định sáng suốt để kiểm tra tính an toàn của hệ thống (RAM/VRAM/Cache). 
+**Dự kiến & Xử lý Rủi ro (Pre-flight cho pha Resume 40 Epochs):**
+- **Cơ chế Huấn luyện tiếp (Warm Start):** Do mẻ 20 Epoch đã hoàn tất 100%, YOLO tự động xóa (strip) bộ nhớ Optimizer khỏi file `last.pt` để tiết kiệm 50% dung lượng. Việc nối tiếp Learning Rate cũ (resume=True) là bất khả thi. Thay vào đó, ta áp dụng cơ chế **Warm Start**: Khởi chạy mẻ mới nạp `last.pt` (tại Notebook `03b_resume_bdd100k.ipynb`), Learning Rate sẽ reset về mức khởi điểm giúp mô hình bật ra khỏi cực tiểu địa phương.
+- **Rủi ro Tràn Ổ Cứng SSD:** Quá trình giải nén Disk Cache đạt 124GB, ép dung lượng trống của ổ đĩa xuống còn ~80GB. Thực tế bộ đệm 124GB này **đã được tạo xong hoàn toàn** trên ổ đĩa. Do đó, mẻ Warm Start sẽ chỉ **đọc lại (re-use)** các file `.npy` này mà không hề tiêu tốn thêm bất kỳ không gian nào. Vẫn an tâm giữ cờ `cache='disk'` để chạy với tốc độ tối đa.
+- **Rủi ro Mất cân bằng dữ liệu (Class Imbalance):** Các lớp `Rider` (26.1%) và `Train` (0%) quá ít dữ liệu trong tập hiện tại. Sẽ cần khắc phục hoặc cân bằng trọng số khi Fine-tune sang tập Nighttime.
+\n\n## 9. Nhật Ký Sự Cố & Bài Học Kinh Nghiệm (Incident Log)
 
 | # | Sự cố                                     | Nguyên nhân                                          | Giải pháp                                                                                                                                             |
 | - | ------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -355,7 +396,7 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 
 ---
 
-## 9. Bảng Theo Dõi Tiến Độ (Task Tracker Checklist)
+## 10. Bảng Theo Dõi Tiến Độ (Task Tracker Checklist)
 
 - `[x]` **Giai đoạn 1: Khởi tạo Project & Môi trường (Environment Setup)**
 
@@ -397,7 +438,7 @@ _Ý nghĩa thực tiễn_: Nhóm 3 chính là "mục tiêu cần giải cứu" c
 
 ---
 
-## 10. Tệp Rác Cần Dọn Dẹp (Cleanup)
+## 11. Tệp Rác Cần Dọn Dẹp (Cleanup)
 
 | File                   | Vị trí                             | Lý do                                                        |
 | ---------------------- | ------------------------------------ | ------------------------------------------------------------- |
