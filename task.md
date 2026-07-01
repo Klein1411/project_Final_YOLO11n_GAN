@@ -55,7 +55,8 @@ Mục tiêu của nó:
 | Hệ điều hành | Windows 11 Home Single Language    |
 | Build            | 22631                              |
 | Python           | 3.10.11                            |
-| PyTorch          | CUDA 12.1                          |
+| PyTorch          | 2.5.1+cu121                        |
+| Ultralytics      | 8.4.80                             |
 | TensorFlow       | 2.10.0                             |
 
 ### 3.2 Hệ quả vận hành
@@ -84,8 +85,8 @@ D:/DAT301m/proposal/
 │   ├── 01b_preprocess_bdd100k.ipynb
 │   ├── 02_train_exdark.ipynb
 │   ├── 02b_resume_exdark.ipynb
-│   ├── 03_train_bdd100k.ipynb
-│   └── 03b_resume_bdd100k.ipynb
+│   ├── 03_train_bdd100k.ipynb  # Đang dùng: stage 3A, base train trên `bdd_day`
+│   └── 03b_resume_bdd100k.ipynb # Đang dùng: stage 3B, fine-tune `bdd_night` từ weight day
 ├── models/
 │   └── runs/
 ├── docs/
@@ -180,10 +181,18 @@ Lý do:
 - Tách BDD thành `bdd_day` và `bdd_night`.
 - Giữ lại occluded boxes để model học sát thực tế.
 - Tạo symlink trước, fallback sang physical copy nếu cần.
-- BDD preprocess đã được sửa alias mapping và rerun thành công trước khi bị dọn khỏi máy.
+- BDD preprocess đã rerun thành công, policy hiện tại là drop toàn bộ `dawn/dusk` và chỉ giữ `daytime` + `night`.
+- Các record ngoài các bucket trên cũng bị bỏ qua theo logic hiện tại của notebook.
+- Manifest summary được ghi tại `docs/bdd_preprocess_manifest.json`.
 - Split cuối đã kiểm tra:
   - `bdd_day`: 36,728 train / 5,258 val
   - `bdd_night`: 27,971 train / 3,929 val
+- Thống kê lỗi của lần rerun hiện tại:
+  - `missing_img = 0`
+  - `empty_labels = 0`
+  - `invalid_boxes = 0`
+  - `image_io_failed = 0`
+  - `label_io_failed = 0`
 
 ### 6.3 Baseline ảnh tối
 
@@ -334,6 +343,7 @@ Kết luận:
 - `data/bdd_day.yaml`
 - `data/bdd_night.yaml`
 - `data/exdark.yaml`
+- `docs/bdd_preprocess_manifest.json`
 - `models/runs/` quan trọng
 - `archive/models/runs/bdd_day_*`
 
@@ -354,8 +364,22 @@ Kết luận:
 ## 13. Trạng Thái Hiện Tại
 
 - Máy đang chạy Windows, VSCode, GPU 4 GB VRAM.
+- `venv` hiện tại đã kiểm tra lại thấy nhận đúng:
+  - `ultralytics 8.4.80`
+  - `torch 2.5.1+cu121`
+  - `CUDA available = True`
+  - `GPU = NVIDIA GeForce RTX 3050 Laptop GPU`
 - ExDark đã xong và có thể dùng làm mốc.
-- BDD preprocess đã sửa nhưng đã xóa khỏi máy để tiết kiệm dung lượng.
+- BDD preprocess đã rerun thành công; manifest summary đã được sinh.
+- Notebook train BDD đã được tách thành 2 stage riêng:
+  - `03_train_bdd100k.ipynb`: base train `bdd_day` 50 epoch
+  - `03b_resume_bdd100k.ipynb`: fine-tune `bdd_night` 50 epoch từ `bdd_day_base_ep50`
+- Cả hai notebook đều đã được ghi chú lại rõ về:
+  - giới hạn máy Windows + VSCode + RTX 3050 4 GB
+  - lý do chia job theo chặng 50 epoch
+  - `save_period=5`
+  - artifact cache như `labels.cache` và `*.npy`
+- Thực thi train vẫn pending, user tự chạy notebook để kiểm soát output và tiến độ.
 - BDD train chưa làm lại trên dataset đã sửa.
 - GAN vẫn là nhánh sau.
 - Tài liệu này là nguồn đọc nhanh cho bất kỳ AI nào vào dự án.
