@@ -2,9 +2,11 @@
 
 Tài liệu này là nguồn sự thật chính cho dự án.
 Mục tiêu của nó:
+
 - Giữ lại toàn bộ context kỹ thuật.
 - Ghi rõ môi trường, dữ liệu, pipeline, kết quả, lỗi, và quyết định.
-- Giúp bất kỳ AI/người nào đọc vào cũng hiểu hiện trạng mà không phải đoán.
+- Giúp bất kỳ người nào đọc vào cũng hiểu hiện trạng mà không phải đoán.
+- `AGENTS.md` chỉ là file rule vận hành; mọi context chi tiết và trạng thái dự án vẫn phải đọc trong `task.md`.
 
 ## 1. Phạm Vi Hiện Tại
 
@@ -41,19 +43,20 @@ Mục tiêu của nó:
 
 ### 3.1 Thông số máy thực tế
 
-| Thành phần | Thông số |
-|---|---|
-| CPU | Intel Core i5-12500H |
-| Core / Thread | 12 / 16 |
-| RAM | 24 GB |
-| GPU | NVIDIA GeForce RTX 3050 Laptop GPU |
-| VRAM | 4 GB |
-| GPU phụ | Intel Iris Xe Graphics |
-| Hệ điều hành | Windows 11 Home Single Language |
-| Build | 22631 |
-| Python | 3.10.11 |
-| PyTorch | CUDA 12.1 |
-| TensorFlow | 2.10.0 |
+
+| Thành phần     | Thông số                         |
+| ---------------- | ---------------------------------- |
+| CPU              | Intel Core i5-12500H               |
+| Core / Thread    | 12 / 16                            |
+| RAM              | 24 GB                              |
+| GPU              | NVIDIA GeForce RTX 3050 Laptop GPU |
+| VRAM             | 4 GB                               |
+| GPU phụ         | Intel Iris Xe Graphics             |
+| Hệ điều hành | Windows 11 Home Single Language    |
+| Build            | 22631                              |
+| Python           | 3.10.11                            |
+| PyTorch          | CUDA 12.1                          |
+| TensorFlow       | 2.10.0                             |
 
 ### 3.2 Hệ quả vận hành
 
@@ -87,7 +90,7 @@ D:/DAT301m/proposal/
 │   └── runs/
 ├── docs/
 ├── archive/
-├── scripts/
+├── scripts/                 # Hiện chỉ giữ `setup_exposure_dataset.py`
 └── venv/
 ```
 
@@ -149,6 +152,7 @@ D:/DAT301m/proposal/
 - `dawn/dusk` -> loại bỏ
 
 Lý do:
+
 - Day dùng làm base model.
 - Night dùng fine-tune.
 - Tách miền giữ được giá trị phân tích của GAN về sau.
@@ -193,39 +197,43 @@ Lý do:
 
 Kết quả chính:
 
+
 | Chỉ số | Giá trị |
-|---|---|
-| mAP50 | 0.569 |
-| mAP50-95 | 0.340 |
+| -------- | --------- |
+| mAP50    | 0.569     |
+| mAP50-95 | 0.340     |
 
 ### 7.2 Pha 2: resume thêm 80 epoch
 
 Kết quả cuối:
 
+
 | Chỉ số | Giá trị |
-|---|---|
-| mAP50 | 0.636 |
-| mAP50-95 | 0.393 |
+| -------- | --------- |
+| mAP50    | 0.636     |
+| mAP50-95 | 0.393     |
 
 Nhận định:
+
 - Model đã bão hòa từ khoảng epoch 65.
 - Train thêm chỉ tăng rất nhỏ.
 - Không đáng để kéo dài thêm vì lợi ích thấp hơn chi phí thời gian.
 
 ### 7.3 Hyperparameters chính
 
-| Tham số | Giá trị |
-|---|---|
-| Model | YOLO11n |
-| Batch size | 8 |
-| Workers | 4 |
-| Cache | disk |
-| Image size | 640 |
-| Optimizer | auto |
-| Patience | 15 |
-| Mosaic | 0.5 |
-| Close mosaic | 10 |
-| Seed | 0 |
+
+| Tham số     | Giá trị |
+| ------------ | --------- |
+| Model        | YOLO11n   |
+| Batch size   | 8         |
+| Workers      | 4         |
+| Cache        | disk      |
+| Image size   | 640       |
+| Optimizer    | auto      |
+| Patience     | 15        |
+| Mosaic       | 0.5       |
+| Close mosaic | 10        |
+| Seed         | 0         |
 
 ### 7.4 Phân tích theo lớp
 
@@ -238,6 +246,7 @@ Nhận định:
 - Train: gần như không học được vì quá ít mẫu.
 
 Kết luận:
+
 - ExDark đã đạt trần hiệu suất hợp lý với `yolo11n`.
 - Model này nên được khóa lại làm mốc tham chiếu.
 
@@ -278,43 +287,44 @@ Kết luận:
 
 ## 10. Lỗi Và Bài Học
 
-| Sự cố | Nguyên nhân | Xử lý |
-|---|---|---|
-| `SyntaxError: accumulate=8` | Ultralytics đã bỏ tham số `accumulate` khỏi API | Xóa tham số, để auto-accumulate mặc định |
-| `yolo26n.pt` xuất hiện trong notebooks | File nháp từ AMP check | Đã xóa |
-| RAM tăng cao khi dùng `cache=disk` | Windows standby cache + workers | Chấp nhận như đặc tính vận hành |
-| Resume chạy dài hơn dự kiến | Dùng `resume=True` sai ngữ cảnh | Dùng warm start thay vì cố resume cứng |
-| Mất class BDD | Sai mapping alias raw labels | Sửa preprocess và rerun |
-| `bdd100k.yaml` bị lẫn vào flow hiện tại | Legacy config | Chỉ giữ làm tài liệu cũ |
+
+| Sự cố                                      | Nguyên nhân                                       | Xử lý                                         |
+| -------------------------------------------- | --------------------------------------------------- | ----------------------------------------------- |
+| `SyntaxError: accumulate=8`                  | Ultralytics đã bỏ tham số`accumulate` khỏi API | Xóa tham số, để auto-accumulate mặc định |
+| `yolo26n.pt` xuất hiện trong notebooks     | File nháp từ AMP check                            | Đã xóa                                       |
+| RAM tăng cao khi dùng`cache=disk`          | Windows standby cache + workers                     | Chấp nhận như đặc tính vận hành         |
+| Resume chạy dài hơn dự kiến             | Dùng`resume=True` sai ngữ cảnh                   | Dùng warm start thay vì cố resume cứng      |
+| Mất class BDD                               | Sai mapping alias raw labels                        | Sửa preprocess và rerun                       |
+| `bdd100k.yaml` bị lẫn vào flow hiện tại | Legacy config                                       | Chỉ giữ làm tài liệu cũ                   |
 
 ## 11. Checklist Tiến Độ
 
 ### 11.1 Hoàn thành
 
-- [x] Khởi tạo cấu trúc repo.
-- [x] Thiết lập môi trường `venv`.
-- [x] Cài PyTorch CUDA 12.1, TensorFlow 2.10, Ultralytics.
-- [x] Chuẩn hóa ExDark sang YOLO format.
-- [x] Tạo baseline CLAHE/Median Filter.
-- [x] Thiết kế và chạy preprocess BDD theo tách miền day/night.
-- [x] Sửa alias mapping BDD raw labels.
-- [x] Train ExDark 50 epoch.
-- [x] Resume ExDark thêm 80 epoch.
-- [x] Chốt ExDark là mốc baseline chính thức.
-- [x] Dọn BDD preprocess khỏi SSD sau khi hoàn tất kiểm tra.
+- [X]  Khởi tạo cấu trúc repo.
+- [X]  Thiết lập môi trường `venv`.
+- [X]  Cài PyTorch CUDA 12.1, TensorFlow 2.10, Ultralytics.
+- [X]  Chuẩn hóa ExDark sang YOLO format.
+- [X]  Tạo baseline CLAHE/Median Filter.
+- [X]  Thiết kế và chạy preprocess BDD theo tách miền day/night.
+- [X]  Sửa alias mapping BDD raw labels.
+- [X]  Train ExDark 50 epoch.
+- [X]  Resume ExDark thêm 80 epoch.
+- [X]  Chốt ExDark là mốc baseline chính thức.
+- [X]  Dọn BDD preprocess khỏi SSD sau khi hoàn tất kiểm tra.
 
 ### 11.2 Đang mở
 
-- [ ] Base train BDD day trên dataset đã sửa.
-- [ ] Fine-tune BDD night từ base.
-- [ ] Đánh giá COCO mAP50-95 cho BDD sau retrain.
-- [ ] So sánh Raw vs CLAHE vs GAN nếu quay lại nhánh tăng cường ảnh.
+- [ ]  Base train BDD day trên dataset đã sửa.
+- [ ]  Fine-tune BDD night từ base.
+- [ ]  Đánh giá COCO mAP50-95 cho BDD sau retrain.
+- [ ]  So sánh Raw vs CLAHE vs GAN nếu quay lại nhánh tăng cường ảnh.
 
 ### 11.3 Pending
 
-- [ ] GAN inference pipeline.
-- [ ] Đánh giá ảnh tăng cường.
-- [ ] Tổng hợp biểu đồ so sánh cuối cùng cho báo cáo.
+- [ ]  GAN inference pipeline.
+- [ ]  Đánh giá ảnh tăng cường.
+- [ ]  Tổng hợp biểu đồ so sánh cuối cùng cho báo cáo.
 
 ## 12. Dung Lượng Và Lưu Trữ
 
