@@ -13,7 +13,7 @@ Mục tiêu của nó:
 - Trọng tâm hiện tại: tinh chỉnh hệ thống nhận diện vật thể bằng YOLOv11.
 - GAN chỉ là nhánh lịch sử và sẽ quay lại ở giai đoạn sau.
 - Trong nhánh hiện tại, không đụng vào các file GAN `py` nếu chúng không phục vụ YOLO.
-- BDD preprocess là dữ liệu tạm, chỉ giữ raw data, config, và log quan trọng.
+- BDD preprocess là dữ liệu trung gian; hiện giữ ảnh/label đến khi hoàn tất báo cáo, còn cache được dọn ngay sau train.
 - Nếu phải chọn giữa giữ dữ liệu và giữ SSD, ưu tiên giữ SSD.
 
 ## 2. Nguồn Dữ Liệu Chính Thức
@@ -86,7 +86,8 @@ D:/DAT301m/proposal/
 │   ├── 02_train_exdark.ipynb
 │   ├── 02b_resume_exdark.ipynb
 │   ├── 03_train_bdd100k.ipynb  # Đang dùng: stage 3A, base train trên `bdd_day`
-│   └── 03b_resume_bdd100k.ipynb # Đang dùng: stage 3B, fine-tune `bdd_night` từ weight day
+│   ├── 03b_resume_bdd100k.ipynb # Đang dùng: stage 3B, fine-tune `bdd_night` từ weight day
+│   └── 04_evaluate_bdd.ipynb # Đánh giá chéo và audit artifact enhancement
 ├── models/
 │   └── runs/
 ├── docs/
@@ -163,8 +164,8 @@ Lý do:
 - ExDark dùng copy vật lý.
 - BDD dùng symlink nếu Windows cho phép.
 - Nếu symlink lỗi quyền, fallback sang copy.
-- BDD preprocess không nên giữ lâu trên SSD.
-- Preprocessed BDD nên sinh khi cần train, xong thì xóa.
+- BDD preprocess vẫn chiếm SSD, nhưng hiện được giữ đến khi hoàn tất báo cáo để tránh phải tái tạo dữ liệu.
+- Sau khi hoàn tất báo cáo, có thể xóa toàn bộ ảnh/label processed BDD và giữ lại raw, YAML, manifest, metrics và run.
 
 ## 6. Pipeline Tiền Xử Lý
 
@@ -282,7 +283,7 @@ Kết luận:
 - Base train ban ngày đã hoàn tất 50/50 epoch tại `models/runs/bdd_day_base_ep50`.
 - Fine-tune ban đêm từ weight ban ngày đã hoàn tất 50/50 epoch tại `models/runs/bdd_night_ft_from_bdd_day_ep50`.
 - Cả hai run đều có `best.pt`, `last.pt` và bản weight gắn nhãn theo tên run.
-- Chưa có notebook đánh giá chéo độc lập; bước tiếp theo là `04_evaluate_bdd.ipynb`.
+- `04_evaluate_bdd.ipynb` đã chạy xong validation chéo, inference mẫu và audit artifact enhancement.
 
 ### 8.4 Ý nghĩa kỹ thuật
 
@@ -300,7 +301,20 @@ Kết luận:
 - Day đạt kết quả tốt nhất theo `mAP50-95` ở epoch 50: `0,24762`.
 - Night đạt kết quả tốt nhất theo `mAP50-95` ở epoch 46: `0,22648`; epoch 50 có `0,22625`.
 - Hai con số trên được đo trên validation của hai miền khác nhau, vì vậy chưa được dùng để kết luận trực tiếp model nào tốt hơn.
-- Cần đánh giá chéo day model và night model trên cả `bdd_day` lẫn `bdd_night` bằng `04_evaluate_bdd.ipynb`.
+
+### 8.6 Kết quả validation chéo
+
+| Model | Validation | Precision | Recall | mAP50 | mAP50-95 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Day model | Day | 0,674 | 0,399 | 0,442 | 0,248 |
+| Day model | Night | 0,564 | 0,329 | 0,333 | 0,181 |
+| Night fine-tune | Night | 0,635 | 0,408 | 0,427 | 0,226 |
+| Night fine-tune | Day | 0,598 | 0,327 | 0,346 | 0,191 |
+
+- Fine-tune night tăng `mAP50-95` trên night khoảng `+0,046` so với day model.
+- Fine-tune night giảm `mAP50-95` trên day khoảng `-0,058` so với day model.
+- Kết quả cho thấy thích nghi miền night tốt hơn nhưng có trade-off và dấu hiệu quên miền day.
+- Bảng đầy đủ được lưu tại `docs/evaluation_summary.md`; số liệu gốc nằm trong `models/runs/bdd_evaluation/bdd_cross_domain_metrics.csv`.
 
 ## 9. GAN
 
@@ -339,12 +353,14 @@ Kết luận:
 - [X]  Hoàn tất fine-tune BDD night 50 epoch từ weight day.
 - [X]  Lưu `best.pt`, `last.pt` và weight gắn nhãn cho hai run BDD.
 - [X]  Dọn `.npy`, `labels.cache` và checkpoint `epoch*.pt` sau khi train.
+- [X]  Chạy validation chéo BDD và lưu metrics, confusion matrix, mẫu inference.
+- [X]  Hoàn tất audit ban đầu các artifact enhancement legacy.
 
 ### 11.2 Đang mở
 
-- [ ]  Đánh giá chéo hai model trên cả day và night.
-- [ ]  Audit provenance của Raw, CLAHE, Gamma, MSRCR, Median Filter, GAN và artifact enhancement legacy.
-- [ ]  Chốt bảng kết quả chính và biểu đồ cho báo cáo.
+- [X]  Đánh giá chéo hai model trên cả day và night.
+- [X]  Audit ban đầu provenance của Raw, CLAHE, Gamma, MSRCR, Median Filter, GAN và artifact enhancement legacy.
+- [X]  Chốt bảng kết quả chính và phân tích đối chiếu BDD/ExDark.
 
 ### 11.3 Pending
 
@@ -371,11 +387,11 @@ Kết luận:
 - `models/runs/bdd_night_ft_from_bdd_day_ep50/weights/bdd_night_ft_from_bdd_day_ep50.pt`
 - Dataset ảnh/label trong `data/processed/bdd_day` và `data/processed/bdd_night` đến cuối dự án.
 
-### Dọn sau khi xác nhận
+### Đã dọn
 
 - `labels.cache`
 - `*.npy`
-- `epoch*.pt` trong hai run BDD sau khi đã xác nhận không cần phân tích learning curve.
+- `epoch*.pt` trong hai run BDD.
 - các dataset tạm sinh ra chỉ để validate
 
 ### Quy tắc
@@ -408,7 +424,8 @@ Kết luận:
 - Base train day đã hoàn tất: 50 epoch, khoảng 20,96 giờ, mAP50-95 cuối `0,24762`.
 - Fine-tune night đã hoàn tất: 50 epoch, khoảng 11,94 giờ, mAP50-95 tốt nhất `0,22648` tại epoch 46.
 - Notebook đánh giá không được tự động chạy; người dùng sẽ chạy từng block trong VSCode.
-- Dataset processed BDD đang chiếm khoảng 121,7 GB; ổ D: còn khoảng 91,2 GB tại lần kiểm tra gần nhất.
+- Dataset processed BDD hiện còn khoảng 1,53 GB sau khi dọn cache; ổ D: còn khoảng 203,49 GB tại lần kiểm tra gần nhất.
+- Kết quả đánh giá được tổng hợp tại `docs/evaluation_summary.md`.
 - Log train day từng cảnh báo cần khoảng 141,9 GB cho disk cache, nên không được bật cache ảnh thêm trong bước đánh giá.
 - GAN vẫn là nhánh sau.
 - Tài liệu này là nguồn đọc nhanh cho bất kỳ AI nào vào dự án.
