@@ -1,0 +1,8 @@
+﻿artifact,path,exists,file_count,size_gb,eligible_for_main_table,provenance_status,notes
+clahe,d:\DAT301m\proposal\baseline_comparison_eval15\enhanced\clahe,True,15,0.001,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."
+gamma,d:\DAT301m\proposal\baseline_comparison_eval15\enhanced\gamma,True,15,0.001,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."
+msrcr,d:\DAT301m\proposal\baseline_comparison_eval15\enhanced\msrcr,True,15,0.002,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."
+median_filter,d:\DAT301m\proposal\baseline_comparison_eval15\enhanced\low_light,True,15,0.001,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."
+gan_legacy,d:\DAT301m\proposal\baseline_comparison_eval15\enhanced\gan,True,15,0.002,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."
+combined_eval,d:\DAT301m\proposal\new\baseline_comparison_combined_eval,True,1017,0.105,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."
+tong_hop_eval,d:\DAT301m\proposal\tong_hop\tong_hop\evaluation_eval15,True,39,0.007,False,manual_review_required,"Chỉ đưa vào bảng chính sau khi xác nhận input, label, protocol và metadata."

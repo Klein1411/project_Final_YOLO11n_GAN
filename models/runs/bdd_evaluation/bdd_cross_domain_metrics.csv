@@ -1,0 +1,5 @@
+﻿case,model,dataset,precision,recall,mAP50,mAP50-95,output_dir
+day_model_on_day,day_best,day,0.6739238233380733,0.39869257261484436,0.44240365623994504,0.24823283996683088,d:\DAT301m\proposal\models\runs\bdd_evaluation\day_model_on_day
+day_model_on_night,day_best,night,0.5642118964901466,0.3287344890178123,0.3325527573262181,0.18087985462861522,d:\DAT301m\proposal\models\runs\bdd_evaluation\day_model_on_night
+night_model_on_night,night_best,night,0.6345470411717296,0.4081872144511511,0.4266747550679745,0.22647111465641864,d:\DAT301m\proposal\models\runs\bdd_evaluation\night_model_on_night
+night_model_on_day,night_best,day,0.5984696983033346,0.32735683603565613,0.3461320545532154,0.19055699171460572,d:\DAT301m\proposal\models\runs\bdd_evaluation\night_model_on_day
